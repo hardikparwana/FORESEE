@@ -102,26 +102,9 @@ traced_generate_sigma_points9_JIT = torch.jit.trace( generate_sigma_points9_JIT,
 # def sigma_point_expand_JIT(GA, PE, gp_params, K_invs, noise, X_s, Y_s, sigma_points, weights, control, dt_outer, dt_inner, polemass_length, gravity, length, masspole, total_mass, tau):#, gps):
 def sigma_point_expand_JIT(sigma_points, weights, control, dt_outer, dt_inner, polemass_length, gravity, length, masspole, total_mass, tau):#, gps):
    
-    n, N = sigma_points.shape   
-    # sys_state = torch.cat( (sigma_points[:,0].reshape(1,-1), control.reshape(1,-1)), 1 )    
-
-    # GP prediction###############################################################
-    # L = torch.tensor(1.0); p = torch.tensor(1.0); omega = torch.tensor([[1.0]])
-    # mu1, cov1 = traced_predict_torch_jit(GA, PE, gp_params[0,0], gp_params[0,1:], L, p, omega, sys_state, K_invs[:,:,0], X_s, Y_s[:,0], noise)
-    # mu2, cov2 = traced_predict_torch_jit(GA, PE, gp_params[1,0], gp_params[1,1:], L, p, omega, sys_state, K_invs[:,:,1], X_s, Y_s[:,1], noise)
-    # mu3, cov3 = traced_predict_torch_jit(GA, PE, gp_params[2,0], gp_params[2,1:], L, p, omega, sys_state, K_invs[:,:,2], X_s, Y_s[:,2], noise)
-    # mu4, cov4 = traced_predict_torch_jit(GA, PE, gp_params[3,0], gp_params[3,1:], L, p, omega, sys_state, K_invs[:,:,3], X_s, Y_s[:,3], noise)
-    # mu = torch.cat( (mu1, mu2, mu3, mu4), dim = 0 ).reshape(-1,1)
-    # cov = torch.diag( torch.cat((cov1, cov2, cov3, cov4), dim = 1)[0] )
-    
+    n, N = sigma_points.shape       
     mu, cov = get_state_dot_noisy_torch(sigma_points[:,0].reshape(-1,1), control.reshape(-1,1), polemass_length, gravity, length, masspole, total_mass, tau)
-    
-    # mu1, std1 = gps[0].predict( sys_state.detach().numpy()  , return_std=True )
-    # mu2, std2 = gps[1].predict( sys_state.detach().numpy()  , return_std=True )
-    # mu3, std3 = gps[2].predict( sys_state.detach().numpy()  , return_std=True )
-    # mu4, std4 = gps[3].predict( sys_state.detach().numpy()  , return_std=True )
-    ###############################################################################
-    
+       
     root_term = get_ut_cov_root_diagonal(cov) 
     temp_points, temp_weights = traced_generate_sigma_points9_JIT( mu, root_term, sigma_points[:,0].reshape(-1,1), dt_outer )
     new_points = torch.clone( temp_points )
@@ -129,23 +112,11 @@ def sigma_point_expand_JIT(sigma_points, weights, control, dt_outer, dt_inner, p
         
     for i in range(1,N):
         
-        # sys_state = torch.cat( (sigma_points[:,i].reshape(1,-1), control.reshape(1,-1)), 1 )   
-        
-        # GP prediction###############################################################
-        # mu1, cov1 = traced_predict_torch_jit(torch.tensor(1.0), torch.tensor(0.0), gp_params[0,0], gp_params[0,1], L, p, omega, sys_state, K_invs[:,:,0], X_s, Y_s[:,0], noise)
-        # mu2, cov2 = traced_predict_torch_jit(torch.tensor(1.0), torch.tensor(0.0), gp_params[1,0], gp_params[1,1], L, p, omega, sys_state, K_invs[:,:,1], X_s, Y_s[:,1], noise)
-        # mu3, cov3 = traced_predict_torch_jit(torch.tensor(1.0), torch.tensor(0.0), gp_params[2,0], gp_params[2,1], L, p, omega, sys_state, K_invs[:,:,2], X_s, Y_s[:,2], noise)
-        # mu4, cov4 = traced_predict_torch_jit(torch.tensor(1.0), torch.tensor(0.0), gp_params[3,0], gp_params[3,1], L, p, omega, sys_state, K_invs[:,:,3], X_s, Y_s[:,3], noise)
-        # mu = torch.cat( (mu1, mu2, mu3, mu4), dim = 0 ).reshape(-1,1)
-        # cov = torch.diag( torch.cat((cov1, cov2, cov3, cov4), dim = 1)[0] )
-        ###############################################################################
-
         root_term = get_ut_cov_root_diagonal(cov)           
         temp_points, temp_weights = traced_generate_sigma_points9_JIT( mu, root_term, sigma_points[:,i].reshape(-1,1), dt_outer )
         new_points = torch.cat((new_points, temp_points), dim=1 )
         new_weights = torch.cat( (new_weights, (temp_weights * weights[0,i]).reshape(1,-1) ) , dim=1 )
-            
-        # print("new_points",new_points)
+
     return new_points, new_weights
 
 def sigma_point_compress_JIT( sigma_points, weights ):

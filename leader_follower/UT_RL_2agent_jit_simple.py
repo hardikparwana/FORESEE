@@ -13,7 +13,6 @@ from robot_models.UnicycleJIT import *
 
 from utils.utils import *
 from ut_utils.ut_utilsJIT import *
-from utils.mvgp import *
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -39,9 +38,6 @@ const1 += [ cp.abs( u1[0,0] )  <= u1_max + delta_u[0,0] ]
 const1 += [ cp.abs( u1[1,0] )  <= u2_max + delta_u[1,0] ]
 const1 += [ delta_u[0,0] >= 0 ]
 const1 += [ delta_u[1,0] >= 0 ]
-# const1 += [ delta[1] == 0 ]
-# const1 += [ delta[2] == 0 ]
-# const1 += [ delta[3] == 0 ]
 objective1 = cp.Minimize( cp.sum_squares( u1 - u1_ref  ) + 100*cp.sum_squares(delta) + 10000 * cp.sum_squares( delta_u ) )
 cbf_controller = cp.Problem( objective1, const1 )
 assert cbf_controller.is_dpp()
@@ -79,15 +75,6 @@ def compute_A1_b1_tensor(robotsJ, robotsK, robotsJ_state, robotsK_state, t, nois
    
     return A1, b1
 
-# traced_sigma_point_expand_JIT = []
-# traced_sigma_point_scale_up5_JIT = []
-# traced_unicycle_SI2D_UT_Mean_Evaluator = []
-# traced_get_mean_JIT = []
-# traced_unicycle_nominal_input_tensor_jit = []
-# traced_cbf_controller_layer = []
-# traced_sigma_point_compress_JIT = []
-# traced_unicycle_reward_UT_Mean_Evaluator_basic = []
-
 first_run = True
 first_generate_sigma_run = True
     
@@ -99,9 +86,7 @@ def get_future_reward( follower, leader, t = 0, noise = torch.tensor(0), enforce
     leader_weights = [prior_leader_weights]
 
     reward = torch.tensor([0],dtype=torch.float)
-    # global first_run, traced_sigma_point_expand_JIT, traced_sigma_point_scale_up5_JIT, traced_unicycle_SI2D_UT_Mean_Evaluator, traced_get_mean_JIT, traced_unicycle_nominal_input_tensor_jit, traced_cbf_controller_layer, traced_sigma_point_compress_JIT, traced_unicycle_reward_UT_Mean_Evaluator_basic
     tp = t
-    # start_t = 1
     
     maintain_constraints = []
     improve_constraints = []    
@@ -329,14 +314,6 @@ def simulate_scenario(movie_name = 'test.mp4', adapt = False, noise = 0.1, enfor
                 if adapt:
                     initialize_tensors(follower, leader)
                     
-                    # t0 = time.time()
-                    # maintain_constraints, improve_constraints, success, reward = get_future_reward( follower, leader, t = t, noise = torch.tensor(noise))
-                    # print(f"Forward time: {time.time()-t0}")
-
-                    # t0 = time.time()
-                    # reward.backward(retain_graph=True)
-                    # print(f"Backward time: {time.time()-t0}")
-                    
                     success = False
                     while not success:
                         maintain_constraints, improve_constraints, success, reward = get_future_reward( follower, leader, t = t, noise = torch.tensor(noise), enforce_input_constraints = enforce_input_constraints)                    
@@ -352,21 +329,6 @@ def simulate_scenario(movie_name = 'test.mp4', adapt = False, noise = 0.1, enfor
                     # print("Successfully made it feasible")      
                     # exit()     
                         
-                    
-                    
-                    # # Get grads
-                    # alpha_grad = getGrad( follower.alpha_torch, l_bound = -0.1, u_bound = 0.1 )                        
-                    # k_grad = getGrad( follower.k_torch, l_bound = -0.1, u_bound = 0.1 )
-                    
-                    # print(f"grads: alpha:{ alpha_grad.T }, k:{ k_grad }")
-                    
-                    # follower.alpha = np.clip( follower.alpha - lr_alpha * alpha_grad.reshape(-1,1), 0.0, None )
-                    # follower.k = np.clip(follower.k - lr_alpha * k_grad, 0.0, None )
-                    # follower.alphas = np.append( follower.alphas, follower.alpha, axis=1 )
-                    # follower.ks = np.append( follower.ks, follower.k )
-                    
-                    # exit()
-                
             fig.canvas.draw()
             fig.canvas.flush_events()
             writer.grab_frame()
@@ -467,14 +429,3 @@ if save_plot:
    
     
 plt.show()
-
-# figure1, axis1 = plt.subplots(2, 2)
-# axis1[0,0].plot(tp,robots[0].adv_alphas[1:,0],'r',label='Adversary')
-# axis1[0,0].plot(tp,robots[0].robot_alphas[1:,1],'g',label='Robot 2')
-# axis1[0,0].plot(tp,robots[0].robot_alphas[1:,2],'k',label='Robot 3')
-# axis1[0,0].set_title('Robot 1 alphas')
-# axis1[0,0].set_xlabel('time (s)')
-# axis1[0,0].legend()
-
-# axis4.set_rasterization_zorder(1)
-# figure4.savefig("new_trajectory.eps", dpi=50, rasterized=True)
