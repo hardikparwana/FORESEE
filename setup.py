@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            #'ex_drone_control_geometric = foresee.ex_drone_control_geometric:main',
+            'control_node = foresee_exp.control_node:main',
         ],
     },
 )
