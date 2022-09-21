@@ -20,10 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'ex_rover_test = foresee.ex_rover_test:main',
-            'ex_drone_hover = foresee.ex_drone_hover:main',
-            'ex_rover_test_classes = foresee.ex_rover_test_classes:main',
-            'ex_drone_control_geometric = foresee.ex_drone_control_geometric:main',
+            #'ex_drone_control_geometric = foresee.ex_drone_control_geometric:main',
         ],
     },
 )
