@@ -45,6 +45,15 @@ cbf_controller_layer = CvxpyLayer( cbf_controller, parameters=[ u1_ref, A1, b1 ]
 
 ########################################
 
+def wrap_angle_numpy(angle):
+    if angle > np.pi:
+        angle = angle - 2 * np.pi
+    if angle < -np.pi:
+        angle = angle + 2 * np.pi
+    return angle
+
+###############################################
+
 class FORESEE(Node):
 
     def __init__(self, robots):
@@ -53,14 +62,21 @@ class FORESEE(Node):
         
         self.publisher_ = self.create_publisher(String, 'topic', 10)
 
-        timer_period_control = 0.05  # seconds
-        self.timer_control = self.create_timer(timer_period_control, self.control_callback)
+        # Find and send Control
+        self.timer_period_control = 0.05  # seconds
+        self.timer_control = self.create_timer(self.timer_period_control, self.control_callback)
 
-        timer_period_leader_estimator = 0.2
-        self.timer_estimator = self.create_timer( timer_period_leader_estimator, self.estimator_callback() )
+        # Update Controller
+        self.timer_period_rl = 0.2  # seconds
+        self.timer_rl = self.create_timer(self.timer_period_rl, self.rl_callback)
 
-        timer_period_leader_observer = 0.05
-        self.timer_observer = self.create_timer( timer_period_leader_observer, self.observer_callback() )
+        # GP Fit
+        self.timer_period_leader_estimator = 0.2
+        self.timer_estimator = self.create_timer( self.timer_period_leader_estimator, self.estimator_callback() )
+
+        # Store Observed Data
+        self.timer_period_leader_observer = 0.05
+        self.timer_observer = self.create_timer( self.timer_period_leader_observer, self.observer_callback() )
         
         self.i = 0
 
@@ -73,13 +89,17 @@ class FORESEE(Node):
         self.leader_pose_previous = np.array([0,0,1,0]).reshape(1,-1)
 
         # Estimator
-        self.likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=4)
+        self.likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=3)
         self.train_x = np.array( [ 0, 0, 1.0, 0.0 ] ).reshape(1,-1)
         self.train_y = np.array( [ 0, 0] ).reshape(1, -1)
         self.gp = MultitaskGPModel(self.train_x, self.train_y, self.likelihood)
-        self.queue = queue()
+        self.queue = queue()      
+    
+    def rl_callback():
+        alpha_torch = torch.clone( self.controller_alpha_torch )
+        k_torch = torch.clone( self.controller_k_torch )
 
-    def leader_observer():
+    def observer_callback():
         dt = 0.05
 
         self.leader_pose_previous = np.copy( self.leader_pose )
@@ -89,9 +109,28 @@ class FORESEE(Node):
         leader_yaw = 2.0 * np.arctan2( leader_quat[0], leader_quat[3] )
         self.leader_pose = np.append( leader_pos[0:2], leader_yaw  )
 
-    def estimator_callback():
+        diff = self.leader_pos - self.leader_pos_previous
+        diff[2] = wrap_angle( diff[2] )
+        new_y = diff / self.timer_period_leader_observer
 
-        self.x_train = np.append( self.x_train,  )
+
+        new_x = np.array([ leader_pos[0], leader_pos[1], np.cos( leader_yaw ), np.sin( leader_yaw ) ])
+
+        self.x_train = np.append( self.x_train,  new_x.reshape(1,-1), axis = 0 )
+        self.y_train = np.append( self.y_train,  new_y.reshape(1,-1), axis = 0 )
+
+    def estimator_callback():
+        data_horizon = 3
+        num_data = data_horizon / self.timer_period_leader_estimator
+        train_x = np.copy( self.train_x[-num_data:, :] )
+        train_y = np.copy( self.train_y[-num_data:, :] )
+
+        idxs  = np.random.randint(np.shape( train_x )[0], size=np.min( np.shape(train_x)[0], 100 ) )
+        self.train_x = train_x[idxs, :]
+        self.train_y = train_y[idxs, :]
+
+        train_gp(self.gp, self.likelihood, train_x, train_y, training_iterations = 30)
+
         
 
     def control_callback(self):
