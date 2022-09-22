@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'control_node = foresee_exp.control_node:main',
+            'basic_control_node = foresee_exp.basic_control_node:main',
         ],
     },
 )
