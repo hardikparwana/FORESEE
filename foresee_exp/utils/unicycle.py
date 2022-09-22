@@ -9,7 +9,8 @@ def unicycle_f_torch_jit(x):
 def unicycle_g_torch_jit(x):
     # return torch.tensor([ [torch.cos(x[2,0]),0.0],[torch.sin(x[2,0]),0.0],[0,1] ])
     g1 = torch.cat( (torch.cos(x[2,0]).reshape(-1,1),torch.tensor([[0]]) ), dim=1 )
-    g2 = torch.cat( ( torch.tensor([[0]]), torch.sin(x[2,0]).reshape(-1,1) ), dim=1 )
+    # g2 = torch.cat( ( torch.tensor([[0]]), torch.sin(x[2,0]).reshape(-1,1) ), dim=1 )
+    g2 = torch.cat( ( torch.sin(x[2,0]).reshape(-1,1), torch.tensor([[0]]) ), dim=1 )
     g3 = torch.tensor([[0,1]],dtype=torch.float)
     gx = torch.cat((g1,g2,g3))
     return gx
@@ -37,7 +38,7 @@ def unicycle_SI2D_cbf_fov_condition_evaluator( robotJ_state, robotK_state, robot
     B = torch.cat( (B1, B2, B3), dim = 0 )
     A = torch.cat( (A1, A2, A3), dim = 0 )
     
-    # print(f"h1:{h1}, , h2:{h2}, h3:{h3}, dh_dx1:{dh1_dxj}, dh_dxk:{ dh1_dxk } ")
+    # print(f"h1:{h1}, , h2:{h2}, h3:{h3}, dh_dx1:{dh1_dxj}, dh_dxk:{ dh1_dxk }, g:{unicycle_g_torch_jit( robotJ_state ) } ")
     
     return A, B
 
@@ -45,7 +46,7 @@ def unicycle_SI2D_fov_barrier_jit(X, targetX):
     
     # print(f"X:{X}, targetX:{targetX}")
     
-    max_D = 1.5
+    max_D = 2.0
     min_D = 0.3
     FoV_angle = torch.tensor(np.pi/3, dtype=torch.float)
     
@@ -64,8 +65,10 @@ def unicycle_SI2D_fov_barrier_jit(X, targetX):
 
     # dir_vector = torch.tensor([[torch.cos(x[2,0])],[torch.sin(x[2,0])]]) # column vector
     dir_vector = torch.cat( ( torch.cos(X[2,0]).reshape(-1,1), torch.sin(X[2,0]).reshape(-1,1) ) )
+    
     bearing_angle  = torch.matmul(dir_vector.T , p )/ torch.norm(p)
     h3 = (bearing_angle - torch.cos(FoV_angle/2))/(1.0-torch.cos(FoV_angle/2))
+    # print(f"dir_vector: {dir_vector.T}, bearing:angle:{ bearing_angle }, h3:{h3}")
 
     norm_p = torch.norm(p)
     dh3_dx = dir_vector.T / norm_p - ( dir_vector.T @ p)  * p.T / torch.pow(norm_p,3)    
@@ -73,7 +76,8 @@ def unicycle_SI2D_fov_barrier_jit(X, targetX):
     dh3_dxi = torch.cat(  ( -dh3_dx , dh3_dTheta), 1  ) /(1.0-torch.cos(FoV_angle/2))
     dh3_dxj = dh3_dx /(1.0-torch.cos(FoV_angle/2))
     
-    print(f"dist_sq:{torch.square(torch.norm( X[0:2] - targetX[0:2] ))}, h1:{h1}, h2:{h2}, h3:{h3}")
+    # print(f"dist_sq:{torch.square(torch.norm( X[0:2] - targetX[0:2] ))}, h1:{h1}, h2:{h2}, h3:{h3}")
+    # print(f" dh3_dxi:{dh3_dxi}, dh3:dxj:{dh3_dxj} ")
     
     return h1, dh1_dxi, dh1_dxj, h2, dh2_dxi, dh2_dxj, h3, dh3_dxi, dh3_dxj
 
@@ -100,7 +104,7 @@ def unicycle_nominal_input_tensor_jit(X, targetX):
     v = v.reshape(-1,1)
     omega = omega.reshape(-1,1)
     U = torch.cat((v,omega))
-    return U
+    return U.reshape(-1,1)
 
 def wrap_angle_tensor_JIT(angle):
     factor = torch.tensor(2*3.14157,dtype=torch.float)
@@ -119,5 +123,5 @@ def unicycle_SI2D_lyapunov_tensor_jit(X, G):
     factor = 2*(torch.norm( X[0:2]- G[0:2] ) - avg_D)/torch.norm( X[0:2] - G[0:2] ) * (  X[0:2] - G[0:2] ).reshape(1,-1) 
     dV_dxi = torch.cat( (factor, torch.tensor([[0]])), dim  = 1 )
     dV_dxj = -factor
-    
+    # print(f" dist:{ torch.norm( X[0:2]- G[0:2] ) }"  )
     return V, dV_dxi, dV_dxj

@@ -57,39 +57,54 @@ class FORESEE(Node):
         self.i = 0
 
         self.controller_k_torch = torch.tensor(1.0, dtype=torch.float)
-        self.controller_alpha_torch = torch.tensor(np.array([0.8,0.8,0.8]), dtype=torch.float)
+        self.controller_alpha_torch = torch.tensor(np.array([0.3,0.3,0.3]), dtype=torch.float)
         
 
     def control_callback(self):
         msg = String()
         msg.data = 'Hello World: %d' % self.i
         self.publisher_.publish(msg)
-        self.get_logger().info('Publishing: "%s"' % msg.data)
+        # self.get_logger().info('Publishing: "%s"' % msg.data)
         self.i += 1
 
-        pos = np.array([0,0,0]) #self.robots[0].get_world_position()
-        quat = np.array([1,0,0,0]) #self.robots[0].get_body_quaternion()
+        pos = self.robots[0].get_world_position()
+        quat = self.robots[0].get_body_quaternion()
         yaw = 2.0 * np.arctan2( quat[3],quat[0] )
         # print(f" quat0:{quat[0]}, quat1:{quat[3]}, yaw:{yaw*180/np.pi} ")
         pose = np.array( [ pos[0], pos[1], yaw ] )
 
-        leader_pos = np.array([1,0,0]) #self.robots[1].get_world_position()
-        leader_quat = np.array([1,0,0,0]) #self.robots[1].get_body_quaternion()
+        leader_pos = self.robots[1].get_world_position()
+        leader_quat = self.robots[1].get_body_quaternion()
         leader_yaw = 2.0 * np.arctan2( leader_quat[0], leader_quat[3] )
         leader_pose = leader_pos[0:2] #np.array( [ leader_pos[0], leader_pos[1], leader_yaw ] )
+        # print(f"leader pos: { leader_pos }")
 
         leader_pose_dot = torch.tensor( [0,0], dtype=torch.float ).reshape(-1,1)
 
         A, b = unicycle_SI2D_clf_cbf_fov_evaluator(torch.tensor(pose, dtype=torch.float).reshape(-1,1), torch.tensor( leader_pose, dtype=torch.float).reshape(-1,1), leader_pose_dot, self.controller_k_torch, self.controller_alpha_torch)
         u_ref = unicycle_nominal_input_tensor_jit( torch.tensor(pose, dtype=torch.float).reshape(-1,1), torch.tensor( leader_pose, dtype=torch.float ).reshape(-1,1) )
+        # u_ref = torch.tensor([0,0], dtype=torch.float).reshape(-1,1)
+
+        # print(f"A:{A}")
+        # print(f"Au_refb:{ A @ u_ref + b }")
 
         solution, deltas = cbf_controller_layer( u_ref, A, b )
         solution = solution.detach().numpy()
         vx = solution[0,0]
         wz = solution[1,0]
 
-        print(f"Commanding velocity u:{vx}, omega:{wz}: yaw:{yaw}")
+        vx = np.clip( vx, -0.6, 0.6 )
+        wz = np.clip( wz, -2.0, 2.0 )
+
+        print(f"Commanding velocity u:{vx}, omega:{wz}: yaw:{yaw}, u_ref:{ u_ref.T }")
         self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
+
+        
+
+        # vx = 0.0
+        # wz = 0.0
+        # self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
+        # self.robots[1].command_velocity( np.array([0,vx,0,0,wz]) )
 
 
 def main(args=None):
@@ -114,15 +129,19 @@ def main(args=None):
     threads = start_ros_nodes(robots)
 
     robot7.set_command_mode( 'velocity' )
+    # robot2.set_command_mode( 'velocity' )
 
     vx = 0.0
-    wz = 2.0
+    wz = 0.0
     for i in range(100):
         robot7.command_velocity( np.array([0,vx,0,0,wz]) )
+        # robot2.command_velocity( np.array([0,vx,0,0,wz]) )
         time.sleep(0.05)#rate.sleep()
 
     robot7.cmd_offboard_mode()
     robot7.arm()
+    # robot2.cmd_offboard_mode()
+    # robot2.arm()
     
     #############################
 
