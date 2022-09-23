@@ -13,6 +13,13 @@ def unicycle_g_torch_jit(x):
     gx = torch.cat((g1,g2,g3))
     return gx
 
+def unicycle_step_torch( state, control, dt ):
+    f = unicycle_f_torch_jit( state )
+    g = unicycle_g_torch_jit( state )
+    next_state = state + ( f + g @ control ) * dt
+    next_state[2] = torch.atan2( torch.sin( next_state[2] ), torch.cos( next_state[2] ) )
+traced_unicycle_step_torch = torch.jit.trace( unicycle_step_torch, ( torch.tensor([0,0,0]), torch.tensor([0,0]).reshape(-1,1), torch.tensor(0.1) ) )
+
 def unicycle_SI2D_clf_condition_evaluator( robotJ_state, robotK_state, robotK_state_dot, k_torch ):
     V, dV_dxj, dV_dxk = unicycle_SI2D_lyapunov_tensor_jit( robotJ_state, robotK_state )
     
@@ -20,6 +27,7 @@ def unicycle_SI2D_clf_condition_evaluator( robotJ_state, robotK_state, robotK_st
     A = - dV_dxj @ unicycle_g_torch_jit( robotJ_state )
     
     return A, B 
+
 
 def unicycle_SI2D_cbf_fov_condition_evaluator( robotJ_state, robotK_state, robotK_state_dot, alpha_torch):
     h1, dh1_dxj, dh1_dxk, h2, dh2_dxj, dh2_dxk, h3, dh3_dxj, dh3_dxk = unicycle_SI2D_fov_barrier_jit(robotJ_state, robotK_state)   
@@ -103,6 +111,7 @@ def unicycle_nominal_input_tensor_jit(X, targetX):
     omega = omega.reshape(-1,1)
     U = torch.cat((v,omega))
     return U.reshape(-1,1)
+traced_unicycle_nominal_input_tensor_jit = torch.trace.jit( unicycle_nominal_input_tensor_jit, ( torch.tensor([0,0,0]).reshape(-1,1), torch.tensor([0,0]).reshape(-1,1) ) )
 
 def wrap_angle_tensor_JIT(angle):
     factor = torch.tensor(2*3.14157,dtype=torch.float)

@@ -15,6 +15,8 @@ import cvxpy as cp
 from cvxpylayers.torch import CvxpyLayer
 from utils.unicycle import *
 from utils.gp_utils import *
+from utils.ut_utils import *
+from utils.utils_generic import *
 
 from std_msgs.msg import String
 
@@ -69,6 +71,8 @@ class FORESEE(Node):
         # Update Controller
         self.timer_period_rl = 0.2  # seconds
         self.timer_rl = self.create_timer(self.timer_period_rl, self.rl_callback)
+        self.dt_outer = torch.tensor(0.1)
+        self.H = 10
 
         # GP Fit
         self.timer_period_leader_estimator = 0.2
@@ -99,6 +103,60 @@ class FORESEE(Node):
         alpha_torch = torch.clone( self.controller_alpha_torch )
         k_torch = torch.clone( self.controller_k_torch )
 
+        # Initialize sigma points
+        f_pos = self.robots[0].get_world_position()
+        f_quat = self.robots[0].get_body_quaternion()
+        f_yaw = 2.0 * np.arctan2( f_quat[3],f_quat[0] )
+        f_pose = torch.tensor( np.array( [ f_pos[0], f_pos[1], f_yaw ] ).reshape(-1,1) )
+        follower_states = [ f_pose ]
+
+        l_pos = self.robots[1].get_world_position()
+        l_quat = self.robots[1].get_body_quaternion()
+        l_yaw = 2.0 * np.arctan2( l_quat[3],l_quat[0] )
+        l_pose = torch.tensor( np.array( [ l_pos[0], l_pos[1], l_yaw ] ).reshape(-1,1) )
+
+        prior_leader_states, prior_leader_weights = initialize_sigma_points2_JIT(l_pose)
+        leader_states = [prior_leader_states]
+        leader_weights = [prior_leader_weights]
+
+        reward = torch.tensor([0],dtype=torch.float)
+
+        tp = self.robots[1].get_current_timestamp_us()
+        
+        for i in range(H):       
+            
+            leader_xdot_states, leader_xdot_weights = traced_sigma_point_expand_JIT( follower_states[i], leader_states[i], leader_weights[i], torch.tensor(tp), noise, self.gp )
+            
+            leader_states_expanded, leader_weights_expanded = traced_sigma_point_scale_up5_JIT( leader_states[i], leader_weights[i])#leader_xdot_weights )
+            
+            A, B = traced_unicycle_SI2D_UT_Mean_Evaluator( follower_states[i], leader_states_expanded, leader_xdot_states, leader_weights_expanded, k_torch, alpha_torch ) 
+                
+            leader_mean_position = traced_get_mean_JIT( leader_states[i], leader_weights[i] )  
+                
+            u_ref = traced_unicycle_nominal_input_tensor_jit( follower_states[i], leader_mean_position )
+            
+            solution, deltas = cbf_controller_layer( u_ref, A, B )
+            # print("solution", solution)
+
+            follower_states.append( traced_unicycle_step_torch( follower_states[i], solution, self.dt_outer ) )        
+            leader_next_state_expanded = leader_states_expanded + leader_xdot_states * self.dt_outer
+            
+            leader_next_states, leader_next_weights = traced_sigma_point_compress_JIT( leader_next_state_expanded, leader_xdot_weights )        
+            leader_states.append( leader_next_states ); leader_weights.append( leader_next_weights )
+            
+            # Get reward for this state and control input choice = Expected reward in general settings
+            reward = reward + traced_unicycle_reward_UT_Mean_Evaluator_basic( follower_states[i+1], leader_states[i+1], leader_weights[i+1])
+            
+            tp = tp + self.dt_outer
+
+        reward.sum().backward(retain_graph=True)
+
+        alpha_grad = getGrad( alpha_torch, l_bound = -2, u_bound = 2 )
+        k_grad = getGrad( k_torch, l_bound = -2, u_bound = 2 )
+
+        self.controller_alpha_torch = self.controller_alpha_torch + self.lr_rate * alpha_grad
+        self.controller_k_torch = self.controller_k_torch + self.lr_rate * k_grad
+
     def observer_callback():
         dt = 0.05
 
@@ -113,8 +171,8 @@ class FORESEE(Node):
         diff[2] = wrap_angle( diff[2] )
         new_y = diff / self.timer_period_leader_observer
 
-
-        new_x = np.array([ leader_pos[0], leader_pos[1], np.cos( leader_yaw ), np.sin( leader_yaw ) ])
+        # new_x = np.array([ leader_pos[0], leader_pos[1], np.cos( leader_yaw ), np.sin( leader_yaw ) ])
+        new_x = robots[1].get_current_timestamp_us() / 1000000.0
 
         self.x_train = np.append( self.x_train,  new_x.reshape(1,-1), axis = 0 )
         self.y_train = np.append( self.y_train,  new_y.reshape(1,-1), axis = 0 )

@@ -76,11 +76,15 @@ def get_ut_cov_root_diagonal(cov):
     return root_term
 
 # @torch.jit.script
-def sigma_point_expand_JIT(robot_state, sigma_points, weights, cur_t, noise):
+def sigma_point_expand_JIT(robot_state, sigma_points, weights, cur_t, noise, gp):
    
     n, N = sigma_points.shape
-    mu, cov = traced_leader_predict_jit(cur_t, noise)  
-    
+    # mu, cov = traced_leader_predict_jit(cur_t, noise)  
+
+    # input_x = torch.cat( sigma_points[0,0], sigma_points[1,0], torch.cos(sigma_points[2,0]), torch.sin(sigma_points[2,0]) )
+    input_x = cur_t
+    prediction = gp( input_x )
+    mu, cov = prediction.mean.reshape(-1,1), prediction.covariance_matrix      
     root_term = get_ut_cov_root_diagonal(cov) 
 
     temp_points, temp_weights = traced_generate_sigma_points5_JIT( mu, root_term )
@@ -88,8 +92,11 @@ def sigma_point_expand_JIT(robot_state, sigma_points, weights, cur_t, noise):
     new_weights = (torch.clone( temp_weights ) * weights[0,0]).reshape(1,-1)
         
     for i in range(1,N):
-        mu, cov = traced_leader_predict_jit(cur_t, noise)  
-        root_term = get_ut_cov_root_diagonal(cov)        
+        # input_x = torch.cat( (sigma_points[0,i], sigma_points[1,i], torch.cos(sigma_points[2,i]), torch.sin(sigma_points[2,i])) )
+        input_x = cur_t
+        prediction = gp( input_x )
+        mu, cov = prediction.mean.reshape(-1,1), prediction.covariance_matrix      
+        root_term = get_ut_cov_root_diagonal(cov)
         temp_points, temp_weights = traced_generate_sigma_points5_JIT( mu, root_term )
         new_points = torch.cat((new_points, temp_points), dim=1 )
         new_weights = torch.cat( (new_weights, (temp_weights * weights[0,i]).reshape(1,-1) ) , dim=1 )
