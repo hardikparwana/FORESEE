@@ -1,3 +1,5 @@
+import numpy as np
+
 def getGrad(param, l_bound = -2, u_bound = 2):
             if param.grad==None:
                 # print("Grad NONE")

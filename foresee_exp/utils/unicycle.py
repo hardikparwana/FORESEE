@@ -54,12 +54,12 @@ def unicycle_SI2D_cbf_fov_condition_evaluator( robotJ_state, robotK_state, robot
     
     return A, B
 
-def unicycle_SI2D_fov_barrier_jit(X, targetX):
+def unicycle_SI2D_fov_barrier_jit(X, targetX):  # max, min, angle
     
     # print(f"X:{X}, targetX:{targetX}")
     
-    max_D = 2.0
-    min_D = 0.6
+    max_D = 2.2
+    min_D = 0.8
     FoV_angle = torch.tensor(np.pi/3, dtype=torch.float)
     
     # Max distance
@@ -129,8 +129,8 @@ def unicycle_nominal_input_tensor_jit(X, targetX):
 traced_unicycle_nominal_input_tensor_jit = torch.jit.trace( unicycle_nominal_input_tensor_jit, ( torch.tensor([0,0,0],dtype=torch.float).reshape(-1,1), torch.tensor([0,0],dtype=torch.float).reshape(-1,1) ) )
 
 def unicycle_SI2D_lyapunov_tensor_jit(X, G):
-    min_D = 0.6
-    max_D = 2.0
+    min_D = 0.8
+    max_D = 2.2
     avg_D = (min_D + max_D)/2.0
     V = torch.square ( torch.norm( X[0:2] - G[0:2] ) - avg_D )
     
@@ -142,13 +142,13 @@ def unicycle_SI2D_lyapunov_tensor_jit(X, G):
 
 def unicycle_compute_reward_jit(X,targetX):
     
-    max_D = torch.tensor(2.0, dtype=torch.float)
-    min_D = torch.tensor(0.6, dtype=torch.float)
+    max_D = torch.tensor(2.2, dtype=torch.float)
+    min_D = torch.tensor(0.8, dtype=torch.float)
     FoV_angle = torch.tensor(3.13/3, dtype=torch.float)    
 
     p = targetX[0:2] - X[0:2]
     dir_vector = torch.cat( ( torch.cos(X[2,0]).reshape(-1,1), torch.sin(X[2,0]).reshape(-1,1) ) )
     bearing_angle  = torch.matmul(dir_vector.T , p )/ torch.norm(p)
     h3 = (bearing_angle - torch.cos(FoV_angle/2))/(1.0-torch.cos(FoV_angle/2))
-    
-    return torch.square( torch.norm( X[0:2,0] - targetX[0:2,0]  ) - torch.tensor((min_D+max_D)/2, dtype=torch.float) ) - 2 * h3
+    # print(f"dist:{  }")
+    return 2 * torch.square( torch.norm( X[0:2,0] - targetX[0:2,0]  ) - torch.tensor((min_D+max_D)/2, dtype=torch.float) ) - 2 * h3

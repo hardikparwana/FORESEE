@@ -88,7 +88,7 @@ class FORESEE(Node):
         # self.queue = queue()     
 
         # RL parameter
-        self.lr_rate = 0.3
+        self.lr_rate = 0.05#0.05
 
         ###### Callbacks ############
 
@@ -97,8 +97,8 @@ class FORESEE(Node):
         self.timer_control = self.create_timer(self.timer_period_control, self.control_callback)
 
         # Move the leader
-        self.timer_period_leader_control = 0.05  # seconds
-        self.timer_leader_control = self.create_timer(self.timer_period_leader_control, self.leader_control_callback)
+        # self.timer_period_leader_control = 0.05  # seconds
+        # self.timer_leader_control = self.create_timer(self.timer_period_leader_control, self.leader_control_callback)
 
         # Store Observed Data
         self.timer_period_leader_observer = 0.05
@@ -111,13 +111,13 @@ class FORESEE(Node):
         # Update Controller
         self.timer_period_rl = 0.4  # seconds
         self.timer_rl = self.create_timer(self.timer_period_rl, self.rl_callback)
-        self.dt_outer = torch.tensor(0.2, dtype=torch.float)
+        self.dt_outer = torch.tensor(0.1, dtype=torch.float)
         self.H = 10 
 
     def leader_control_callback(self):
         t = np.float32( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 )
-        R = 1.5
-        omega = np.pi/3
+        R = 0.8
+        omega = np.pi/6
         x = R * np.cos( omega * t ) - 1.0
         y = R * np.sin( omega * t )
         vx = omega * R 
@@ -199,9 +199,17 @@ class FORESEE(Node):
 
         if not self.estimator_init:
             return
-        alpha_torch = torch.tensor( self.controller_alpha_torch.detach().numpy(), dtype=torch.float )
-        k_torch = torch.tensor( self.controller_k_torch.detach().numpy(), dtype=torch.float )
-
+        # print("hello0")
+        alpha_torch_temp = torch.clone( self.controller_alpha_torch )
+        # print("hello01")
+        alpha_torch_numpy = alpha_torch_temp.detach().numpy()
+        # print("hello02")
+        alpha_torch = torch.tensor( alpha_torch_numpy, dtype=torch.float, requires_grad=True )
+        # print("hello03")
+        k_torch_temp = torch.clone( self.controller_k_torch )
+        k_torch_numpy = k_torch_temp.detach().numpy()
+        k_torch = torch.tensor( k_torch_numpy, dtype=torch.float, requires_grad=True )
+        # print("hello")
         # print(f"alpha:{alpha_torch}, k_torch:{}")
 
         # Initialize sigma points
@@ -210,13 +218,13 @@ class FORESEE(Node):
         f_yaw = 2.0 * np.arctan2( f_quat[3],f_quat[0] )
         f_pose = torch.tensor( np.array( [ f_pos[0], f_pos[1], f_yaw ] ).reshape(-1,1), dtype=torch.float )
         follower_states = [ f_pose ]
-
+        # print("hello1")
         l_pos = self.robots[1].get_world_position()
         l_quat = self.robots[1].get_body_quaternion()
         l_yaw = 2.0 * np.arctan2( l_quat[3],l_quat[0] )
         l_pose = torch.tensor( np.array([ l_pos[0], l_pos[1] ]).reshape(-1,1), dtype=torch.float )
         # l_pose = torch.tensor( np.array( [ l_pos[0], l_pos[1], l_yaw ] ).reshape(-1,1), dtype=torch.float )
-
+        # print("hell2")
         prior_leader_states, prior_leader_weights = initialize_sigma_points2_JIT(l_pose)
         leader_states = [prior_leader_states]
         leader_weights = [prior_leader_weights]
@@ -258,11 +266,12 @@ class FORESEE(Node):
 
         # print(f"reward:{reward}, alpha_grad:{alpha_grad}, k_grad:{k_grad} ") 
 
-        self.controller_alpha_torch = self.controller_alpha_torch + self.lr_rate * alpha_grad
-        self.controller_k_torch = self.controller_k_torch + self.lr_rate * k_grad       
+        self.controller_alpha_torch = torch.clip(self.controller_alpha_torch - self.lr_rate * alpha_grad, min = 0, max = None )
+        self.controller_k_torch = torch.clip( self.controller_k_torch - self.lr_rate * k_grad, min = 0, max = None)    
         alpha_cur = self.controller_alpha_torch.detach().numpy()
         # self.get_logger().info( 'Reward %f k %f alpha %f %f %f' % (reward.item(), self.controller_k_torch.item(), self.controller_alpha_torch[0].item(), self.controller_alpha_torch[1].item(), self.controller_alpha_torch[3].item() ) ) 
         self.get_logger().info( 'Reward and params %f %f %f %f %f' % (reward, self.controller_k_torch.item(), alpha_cur[0], alpha_cur[1], alpha_cur[2]) )
+        # print( f" reward:{reward}, alpha_grad:{alpha_grad}, k_grad:{k_grad}" )
 
     def control_callback(self):
         msg = String()
@@ -343,19 +352,19 @@ def main(args=None):
     time.sleep(2.0)
 
     robot7.set_command_mode( 'velocity' )
-    robot2.set_command_mode( 'velocity' )
+    # robot2.set_command_mode( 'velocity' )
 
     vx = 0.0
     wz = 0.0
     for i in range(100):
         robot7.command_velocity( np.array([0,vx,0,0,wz]) )
-        robot2.command_velocity( np.array([0,vx,0,0,wz]) )
+        # robot2.command_velocity( np.array([0,vx,0,0,wz]) )
         time.sleep(0.05)#rate.sleep()
 
     robot7.cmd_offboard_mode()
     robot7.arm()
-    robot2.cmd_offboard_mode()
-    robot2.arm()
+    # robot2.cmd_offboard_mode()
+    # robot2.arm()
     
     #############################
 
