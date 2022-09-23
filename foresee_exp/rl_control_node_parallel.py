@@ -9,6 +9,8 @@ from rclpy.node import Node
 import numpy as np
 import threading
 import time
+
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 
 import torch
@@ -57,6 +59,86 @@ def wrap_angle_numpy(angle):
 
 ###############################################
 
+class FORESEE_UPDATE(Node):
+
+    def __init__(self, foresee_node, robots):
+        super().__init__('minimal_publisher')
+        self.foresee_update_node = foresee_node
+        self.robots = robots
+
+        # Update Controller
+        self.timer_period_rl = 0.2  # seconds
+        self.timer_rl = self.create_timer(self.timer_period_rl, self.rl_callback)
+        self.dt_outer = torch.tensor(0.2, dtype=torch.float)
+        self.H = 10 
+
+    def rl_callback(self):
+
+        if not self.foresee_node.estimator_init:
+            return
+        alpha_torch = torch.tensor( self.foresee_node.controller_alpha_torch.detach().numpy(), dtype=torch.float )
+        k_torch = torch.tensor( self.foresee_node.controller_k_torch.detach().numpy(), dtype=torch.float )
+
+        # print(f"alpha:{alpha_torch}, k_torch:{}")
+
+        # Initialize sigma points
+        f_pos = self.robots[0].get_world_position()
+        f_quat = self.robots[0].get_body_quaternion()
+        f_yaw = 2.0 * np.arctan2( f_quat[3],f_quat[0] )
+        f_pose = torch.tensor( np.array( [ f_pos[0], f_pos[1], f_yaw ] ).reshape(-1,1), dtype=torch.float )
+        follower_states = [ f_pose ]
+
+        l_pos = self.robots[1].get_world_position()
+        l_quat = self.robots[1].get_body_quaternion()
+        l_yaw = 2.0 * np.arctan2( l_quat[3],l_quat[0] )
+        l_pose = torch.tensor( np.array([ l_pos[0], l_pos[1] ]).reshape(-1,1), dtype=torch.float )
+        # l_pose = torch.tensor( np.array( [ l_pos[0], l_pos[1], l_yaw ] ).reshape(-1,1), dtype=torch.float )
+
+        prior_leader_states, prior_leader_weights = initialize_sigma_points2_JIT(l_pose)
+        leader_states = [prior_leader_states]
+        leader_weights = [prior_leader_weights]
+
+        reward = torch.tensor([0],dtype=torch.float)
+
+        tp = torch.tensor( np.float64( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.foresee_node.t0 ), dtype = torch.float )
+        
+        for i in range(self.foresee_node.H):       
+            # print(f"leader size:{leader_states[i]}")
+            
+            leader_xdot_states, leader_xdot_weights = traced_sigma_point_expand_JIT( follower_states[i], leader_states[i], leader_weights[i], tp, self.foresee_node.gp )
+            
+            leader_states_expanded, leader_weights_expanded = traced_sigma_point_scale_up5_JIT( leader_states[i], leader_weights[i])#leader_xdot_weights )
+            # print(f"i:{i}, tp:{tp}: l shape:{leader_states[i].shape}, xdot:{leader_xdot_states.shape}, ex:{leader_states_expanded.shape}")
+            A, B = traced_unicycle_SI2D_UT_Mean_Evaluator( follower_states[i], leader_states_expanded, leader_xdot_states, leader_weights_expanded, k_torch, alpha_torch ) 
+                
+            leader_mean_position = traced_get_mean_JIT( leader_states[i], leader_weights[i] )  
+                
+            u_ref = traced_unicycle_nominal_input_tensor_jit( follower_states[i], leader_mean_position )
+            
+            solution, deltas = cbf_controller_layer( u_ref, A, B )
+            # print("solution", solution)
+
+            follower_states.append( traced_unicycle_step_torch( follower_states[i], solution, self.foresee_node.dt_outer ) )        
+            leader_next_state_expanded = leader_states_expanded + leader_xdot_states * self.foresee_node.dt_outer
+            
+            leader_next_states, leader_next_weights = traced_sigma_point_compress_JIT( leader_next_state_expanded, leader_xdot_weights )        
+            leader_states.append( leader_next_states ); leader_weights.append( leader_next_weights )
+            
+            # Get reward for this state and control input choice = Expected reward in general settings
+            reward = reward + traced_unicycle_reward_UT_Mean_Evaluator_basic( follower_states[i+1], leader_states[i+1], leader_weights[i+1])
+            
+            tp = tp + self.foresee_node.dt_outer
+        reward.sum().backward(retain_graph=True)
+
+        alpha_grad = getGrad( alpha_torch, l_bound = -2, u_bound = 2 )
+        k_grad = getGrad( k_torch, l_bound = -2, u_bound = 2 )
+
+        print(f"reward:{reward}, alpha_grad:{alpha_grad}, k_grad:{k_grad} ") 
+
+        self.foresee_node.controller_alpha_torch = self.foresee_node.controller_alpha_torch + self.foresee_node.lr_rate * alpha_grad
+        self.foresee_node.controller_k_torch = self.foresee_node.controller_k_torch + self.foresee_node.lr_rate * k_grad        
+
+
 class FORESEE(Node):
 
     def __init__(self, robots):
@@ -93,7 +175,7 @@ class FORESEE(Node):
         ###### Callbacks ############
 
         # Find and send Control for rover 7
-        self.timer_period_control = 0.05  # seconds
+        self.timer_period_control = 0.02  # seconds
         self.timer_control = self.create_timer(self.timer_period_control, self.control_callback)
 
         # Move the leader
@@ -108,12 +190,6 @@ class FORESEE(Node):
         self.timer_period_leader_estimator = 0.2
         self.timer_estimator = self.create_timer( self.timer_period_leader_estimator, self.estimator_callback )
 
-        # Update Controller
-        self.timer_period_rl = 0.4  # seconds
-        self.timer_rl = self.create_timer(self.timer_period_rl, self.rl_callback)
-        self.dt_outer = torch.tensor(0.2, dtype=torch.float)
-        self.H = 10 
-
     def leader_control_callback(self):
         t = np.float32( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 )
         R = 1.5
@@ -123,8 +199,8 @@ class FORESEE(Node):
         vx = omega * R 
         # print(f"x:{vx}, omega:{omega}")
         # self.robots[1].command_position( np.array([x, y, 0, 0, 0]) )
-        # vx = 0
-        # omega = 0
+        vx = 0
+        omega = 0
         self.robots[1].command_velocity(np.array([0, vx, 0, 0, omega]) )
 
     def observer_callback(self):
@@ -193,77 +269,6 @@ class FORESEE(Node):
 
         self.estimator_init = True
 
-        # self.get_logger().info('GP Training done')
-    
-    def rl_callback(self):
-
-        if not self.estimator_init:
-            return
-        alpha_torch = torch.tensor( self.controller_alpha_torch.detach().numpy(), dtype=torch.float )
-        k_torch = torch.tensor( self.controller_k_torch.detach().numpy(), dtype=torch.float )
-
-        # print(f"alpha:{alpha_torch}, k_torch:{}")
-
-        # Initialize sigma points
-        f_pos = self.robots[0].get_world_position()
-        f_quat = self.robots[0].get_body_quaternion()
-        f_yaw = 2.0 * np.arctan2( f_quat[3],f_quat[0] )
-        f_pose = torch.tensor( np.array( [ f_pos[0], f_pos[1], f_yaw ] ).reshape(-1,1), dtype=torch.float )
-        follower_states = [ f_pose ]
-
-        l_pos = self.robots[1].get_world_position()
-        l_quat = self.robots[1].get_body_quaternion()
-        l_yaw = 2.0 * np.arctan2( l_quat[3],l_quat[0] )
-        l_pose = torch.tensor( np.array([ l_pos[0], l_pos[1] ]).reshape(-1,1), dtype=torch.float )
-        # l_pose = torch.tensor( np.array( [ l_pos[0], l_pos[1], l_yaw ] ).reshape(-1,1), dtype=torch.float )
-
-        prior_leader_states, prior_leader_weights = initialize_sigma_points2_JIT(l_pose)
-        leader_states = [prior_leader_states]
-        leader_weights = [prior_leader_weights]
-
-        reward = torch.tensor([0],dtype=torch.float)
-
-        tp = torch.tensor( np.float64( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 ), dtype = torch.float )
-        
-        for i in range(self.H):       
-            # print(f"leader size:{leader_states[i]}")
-            
-            leader_xdot_states, leader_xdot_weights = traced_sigma_point_expand_JIT( follower_states[i], leader_states[i], leader_weights[i], tp, self.gp )
-            
-            leader_states_expanded, leader_weights_expanded = traced_sigma_point_scale_up5_JIT( leader_states[i], leader_weights[i])#leader_xdot_weights )
-            # print(f"i:{i}, tp:{tp}: l shape:{leader_states[i].shape}, xdot:{leader_xdot_states.shape}, ex:{leader_states_expanded.shape}")
-            A, B = traced_unicycle_SI2D_UT_Mean_Evaluator( follower_states[i], leader_states_expanded, leader_xdot_states, leader_weights_expanded, k_torch, alpha_torch ) 
-                
-            leader_mean_position = traced_get_mean_JIT( leader_states[i], leader_weights[i] )  
-                
-            u_ref = traced_unicycle_nominal_input_tensor_jit( follower_states[i], leader_mean_position )
-            
-            solution, deltas = cbf_controller_layer( u_ref, A, B )
-            # print("solution", solution)
-
-            follower_states.append( traced_unicycle_step_torch( follower_states[i], solution, self.dt_outer ) )        
-            leader_next_state_expanded = leader_states_expanded + leader_xdot_states * self.dt_outer
-            
-            leader_next_states, leader_next_weights = traced_sigma_point_compress_JIT( leader_next_state_expanded, leader_xdot_weights )        
-            leader_states.append( leader_next_states ); leader_weights.append( leader_next_weights )
-            
-            # Get reward for this state and control input choice = Expected reward in general settings
-            reward = reward + traced_unicycle_reward_UT_Mean_Evaluator_basic( follower_states[i+1], leader_states[i+1], leader_weights[i+1])
-            
-            tp = tp + self.dt_outer
-        reward.sum().backward(retain_graph=True)
-
-        alpha_grad = getGrad( alpha_torch, l_bound = -2, u_bound = 2 )
-        k_grad = getGrad( k_torch, l_bound = -2, u_bound = 2 )
-
-        # print(f"reward:{reward}, alpha_grad:{alpha_grad}, k_grad:{k_grad} ") 
-
-        self.controller_alpha_torch = self.controller_alpha_torch + self.lr_rate * alpha_grad
-        self.controller_k_torch = self.controller_k_torch + self.lr_rate * k_grad       
-        alpha_cur = self.controller_alpha_torch.detach().numpy()
-        # self.get_logger().info( 'Reward %f k %f alpha %f %f %f' % (reward.item(), self.controller_k_torch.item(), self.controller_alpha_torch[0].item(), self.controller_alpha_torch[1].item(), self.controller_alpha_torch[3].item() ) ) 
-        self.get_logger().info( 'Reward and params %f %f %f %f %f' % (reward, self.controller_k_torch.item(), alpha_cur[0], alpha_cur[1], alpha_cur[2]) )
-
     def control_callback(self):
         msg = String()
         msg.data = 'Hello World: %d' % self.i
@@ -310,13 +315,16 @@ class FORESEE(Node):
         vx = np.clip( vx, -0.6, 0.6 )
         wz = np.clip( wz, -2.0, 2.0 )
 
-        # print(f"Commanding velocity u:{vx}, omega:{wz}: yaw:{yaw}, u_ref:{ u_ref.T }, alpha:{self.controller_alpha_torch}, k:{self.controller_k_torch}")
-        self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
-
-        # vx = 0.0
-        # wz = 0.0
+        print(f"Commanding velocity u:{vx}, omega:{wz}: yaw:{yaw}, u_ref:{ u_ref.T }, alpha:{self.controller_alpha_torch}, k:{self.controller_k_torch}")
         # self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
-        # self.robots[1].command_velocity( np.array([0,vx,0,0,wz]) )
+
+        
+
+        vx = 0.0
+        wz = 0.0
+        self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
+        self.robots[1].command_velocity( np.array([0,vx,0,0,wz]) )
+
 
 
 def main(args=None):
@@ -360,15 +368,21 @@ def main(args=None):
     #############################
 
     control_node = FORESEE(robots)
+    param_update_node = FORESEE_UPDATE(control_node, robots)
 
-    executor = MultiThreadedExecutor(num_threads=5)
+    executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(control_node)
-    executor.spin()
+    executor.add_node(param_update_node)
+
+    try:
+        executor.spin()
+    finally:
+        executor.shutdown()
+        control_node.destroy_node()
+
 
     # rclpy.spin(control_node)
-
-    executor.shutdown()
-    control_node.destroy_node()
+    # control_node.destroy_node()
     rclpy.shutdown()
 
     print("End of Run")

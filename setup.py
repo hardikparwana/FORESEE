@@ -21,7 +21,8 @@ setup(
     entry_points={
         'console_scripts': [
             'basic_control_node = foresee_exp.basic_control_node:main',
-            'rl_control_node = foresee_exp.rl_control_node:main'
+            'rl_control_node = foresee_exp.rl_control_node:main',
+            'rl_control_node_parallel = foresee_exp.rl_control_node_parallel:main'
         ],
     },
 )
