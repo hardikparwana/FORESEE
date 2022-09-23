@@ -2,28 +2,33 @@ import numpy as np
 import torch
 
 def unicycle_f_torch_jit(x):
-    return torch.tensor([0.0,0.0,0.0],dtype=torch.float).reshape(-1,1)
+    return torch.tensor([0.0,0.0,0.0], dtype=torch.float).reshape(-1,1)
 
 def unicycle_g_torch_jit(x):
     # return torch.tensor([ [torch.cos(x[2,0]),0.0],[torch.sin(x[2,0]),0.0],[0,1] ])
-    g1 = torch.cat( (torch.cos(x[2,0]).reshape(-1,1),torch.tensor([[0]]) ), dim=1 )
+    g1 = torch.cat( (torch.cos(x[2,0]).reshape(-1,1),torch.tensor([[0]], dtype=torch.float) ), dim=1 )
     # g2 = torch.cat( ( torch.tensor([[0]]), torch.sin(x[2,0]).reshape(-1,1) ), dim=1 )
-    g2 = torch.cat( (torch.sin(x[2,0]).reshape(-1,1), torch.tensor([[0]]) ), dim=1 )
+    g2 = torch.cat( (torch.sin(x[2,0]).reshape(-1,1), torch.tensor([[0]], dtype=torch.float) ), dim=1 )
     g3 = torch.tensor([[0,1]],dtype=torch.float)
     gx = torch.cat((g1,g2,g3))
     return gx
 
 def unicycle_step_torch( state, control, dt ):
+    # print(f" state:{state}, control:{control}, dt:{dt}")
     f = unicycle_f_torch_jit( state )
     g = unicycle_g_torch_jit( state )
-    next_state = state + ( f + g @ control ) * dt
-    next_state[2] = torch.atan2( torch.sin( next_state[2] ), torch.cos( next_state[2] ) )
+    next_state = state + ( f + torch.matmul(g, control) ) * dt
+    next_state_clone = torch.clone( next_state )
+    next_state[2,0] = torch.atan2( torch.sin( next_state_clone[2,0] ), torch.cos( next_state_clone[2,0] ) )
     return next_state
-traced_unicycle_step_torch = torch.jit.trace( unicycle_step_torch, ( torch.tensor([0,0,0], dtype=torch.float).reshape(-1,1), torch.tensor([0,0], dtype=torch.float).reshape(-1,1), torch.tensor(0.1, dtype=torch.float) ) )
+traced_unicycle_step_torch = unicycle_step_torch #torch.jit.trace( unicycle_step_torch, ( torch.tensor([0,0,0], dtype=torch.float).reshape(-1,1), torch.tensor([0,0], dtype=torch.float).reshape(-1,1), torch.tensor(0.1, dtype=torch.float) ) )
 
 def unicycle_SI2D_clf_condition_evaluator( robotJ_state, robotK_state, robotK_state_dot, k_torch ):
     V, dV_dxj, dV_dxk = unicycle_SI2D_lyapunov_tensor_jit( robotJ_state, robotK_state )
-    
+    # print(f"dV_dxj:{dV_dxj}, f:{unicycle_f_torch_jit( robotJ_state )}, dV_dxk:{dV_dxk}, state_dot:{robotK_state_dot}, k_torch:{k_torch}, V:{V}")
+    # print(f"1:{dV_dxj @ unicycle_f_torch_jit( robotJ_state )} ")
+    # print(f" 2:{dV_dxk @ robotK_state_dot} ")
+    # print(f"3:{k_torch * V}")
     B = - dV_dxj @ unicycle_f_torch_jit( robotJ_state ) - dV_dxk @ robotK_state_dot - k_torch * V
     A = - dV_dxj @ unicycle_g_torch_jit( robotJ_state )
     
@@ -59,12 +64,12 @@ def unicycle_SI2D_fov_barrier_jit(X, targetX):
     
     # Max distance
     h1 = max_D**2 - torch.square( torch.norm( X[0:2] - targetX[0:2] ) )
-    dh1_dxi = torch.cat( ( -2*( X[0:2] - targetX[0:2] ), torch.tensor([[0.0]]) ), 0).T
+    dh1_dxi = torch.cat( ( -2*( X[0:2] - targetX[0:2] ), torch.tensor([[0.0]], dtype=torch.float) ), 0).T
     dh1_dxj =  2*( X[0:2] - targetX[0:2] ).T
     
     # Min distance
     h2 = torch.square(torch.norm( X[0:2] - targetX[0:2] )) - min_D**2
-    dh2_dxi = torch.cat( ( 2*( X[0:2] - targetX[0:2] ), torch.tensor([[0.0]]) ), 0).T
+    dh2_dxi = torch.cat( ( 2*( X[0:2] - targetX[0:2] ), torch.tensor([[0.0]], dtype=torch.float) ), 0).T
     dh2_dxj = - 2*( X[0:2] - targetX[0:2]).T
 
     # Max angle
@@ -130,20 +135,20 @@ def unicycle_SI2D_lyapunov_tensor_jit(X, G):
     V = torch.square ( torch.norm( X[0:2] - G[0:2] ) - avg_D )
     
     factor = 2*(torch.norm( X[0:2]- G[0:2] ) - avg_D)/torch.norm( X[0:2] - G[0:2] ) * (  X[0:2] - G[0:2] ).reshape(1,-1) 
-    dV_dxi = torch.cat( (factor, torch.tensor([[0]])), dim  = 1 )
+    dV_dxi = torch.cat( (factor, torch.tensor([[0]], dtype=torch.float) ), dim  = 1 )
     dV_dxj = -factor
     # print(f" dist:{ torch.norm( X[0:2]- G[0:2] ) }"  )
     return V, dV_dxi, dV_dxj
 
 def unicycle_compute_reward_jit(X,targetX):
     
-    max_D = torch.tensor(2.0)
-    min_D = torch.tensor(0.6)
-    FoV_angle = torch.tensor(3.13/3)    
+    max_D = torch.tensor(2.0, dtype=torch.float)
+    min_D = torch.tensor(0.6, dtype=torch.float)
+    FoV_angle = torch.tensor(3.13/3, dtype=torch.float)    
 
     p = targetX[0:2] - X[0:2]
     dir_vector = torch.cat( ( torch.cos(X[2,0]).reshape(-1,1), torch.sin(X[2,0]).reshape(-1,1) ) )
     bearing_angle  = torch.matmul(dir_vector.T , p )/ torch.norm(p)
     h3 = (bearing_angle - torch.cos(FoV_angle/2))/(1.0-torch.cos(FoV_angle/2))
     
-    return torch.square( torch.norm( X[0:2,0] - targetX[0:2,0]  ) - torch.tensor((min_D+max_D)/2) ) - 2 * h3
+    return torch.square( torch.norm( X[0:2,0] - targetX[0:2,0]  ) - torch.tensor((min_D+max_D)/2, dtype=torch.float) ) - 2 * h3

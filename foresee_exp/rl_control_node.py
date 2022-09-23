@@ -86,10 +86,13 @@ class FORESEE(Node):
         self.estimator_init = False
         # self.queue = queue()     
 
+        # RL parameter
+        self.lr_rate = 0.3
+
         ###### Callbacks ############
 
         # Find and send Control for rover 7
-        self.timer_period_control = 0.05  # seconds
+        self.timer_period_control = 0.02  # seconds
         self.timer_control = self.create_timer(self.timer_period_control, self.control_callback)
 
         # Move the leader
@@ -105,10 +108,10 @@ class FORESEE(Node):
         self.timer_estimator = self.create_timer( self.timer_period_leader_estimator, self.estimator_callback )
 
         # Update Controller
-        # self.timer_period_rl = 0.2  # seconds
-        # self.timer_rl = self.create_timer(self.timer_period_rl, self.rl_callback)
-        # self.dt_outer = torch.tensor(0.1)
-        # self.H = 10 
+        self.timer_period_rl = 0.2  # seconds
+        self.timer_rl = self.create_timer(self.timer_period_rl, self.rl_callback)
+        self.dt_outer = torch.tensor(0.2, dtype=torch.float)
+        self.H = 10 
 
     def leader_control_callback(self):
         t = np.float32( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 )
@@ -119,6 +122,8 @@ class FORESEE(Node):
         vx = omega * R 
         # print(f"x:{vx}, omega:{omega}")
         # self.robots[1].command_position( np.array([x, y, 0, 0, 0]) )
+        vx = 0
+        omega = 0
         self.robots[1].command_velocity(np.array([0, vx, 0, 0, omega]) )
 
     def observer_callback(self):
@@ -193,20 +198,23 @@ class FORESEE(Node):
 
         if not self.estimator_init:
             return
-        alpha_torch = torch.clone( self.controller_alpha_torch )
-        k_torch = torch.clone( self.controller_k_torch )
+        alpha_torch = torch.tensor( self.controller_alpha_torch.detach().numpy(), dtype=torch.float )
+        k_torch = torch.tensor( self.controller_k_torch.detach().numpy(), dtype=torch.float )
+
+        # print(f"alpha:{alpha_torch}, k_torch:{}")
 
         # Initialize sigma points
         f_pos = self.robots[0].get_world_position()
         f_quat = self.robots[0].get_body_quaternion()
         f_yaw = 2.0 * np.arctan2( f_quat[3],f_quat[0] )
-        f_pose = torch.tensor( np.array( [ f_pos[0], f_pos[1], f_yaw ] ).reshape(-1,1) )
+        f_pose = torch.tensor( np.array( [ f_pos[0], f_pos[1], f_yaw ] ).reshape(-1,1), dtype=torch.float )
         follower_states = [ f_pose ]
 
         l_pos = self.robots[1].get_world_position()
         l_quat = self.robots[1].get_body_quaternion()
         l_yaw = 2.0 * np.arctan2( l_quat[3],l_quat[0] )
-        l_pose = torch.tensor( np.array( [ l_pos[0], l_pos[1], l_yaw ] ).reshape(-1,1) )
+        l_pose = torch.tensor( np.array([ l_pos[0], l_pos[1] ]).reshape(-1,1), dtype=torch.float )
+        # l_pose = torch.tensor( np.array( [ l_pos[0], l_pos[1], l_yaw ] ).reshape(-1,1), dtype=torch.float )
 
         prior_leader_states, prior_leader_weights = initialize_sigma_points2_JIT(l_pose)
         leader_states = [prior_leader_states]
@@ -214,14 +222,15 @@ class FORESEE(Node):
 
         reward = torch.tensor([0],dtype=torch.float)
 
-        tp = self.robots[1].get_current_timestamp_us()
+        tp = torch.tensor( np.float64( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 ), dtype = torch.float )
         
-        for i in range(H):       
+        for i in range(self.H):       
+            # print(f"leader size:{leader_states[i]}")
             
-            leader_xdot_states, leader_xdot_weights = traced_sigma_point_expand_JIT( follower_states[i], leader_states[i], leader_weights[i], torch.tensor(tp), noise, self.gp )
+            leader_xdot_states, leader_xdot_weights = traced_sigma_point_expand_JIT( follower_states[i], leader_states[i], leader_weights[i], tp, self.gp )
             
             leader_states_expanded, leader_weights_expanded = traced_sigma_point_scale_up5_JIT( leader_states[i], leader_weights[i])#leader_xdot_weights )
-            
+            # print(f"i:{i}, tp:{tp}: l shape:{leader_states[i].shape}, xdot:{leader_xdot_states.shape}, ex:{leader_states_expanded.shape}")
             A, B = traced_unicycle_SI2D_UT_Mean_Evaluator( follower_states[i], leader_states_expanded, leader_xdot_states, leader_weights_expanded, k_torch, alpha_torch ) 
                 
             leader_mean_position = traced_get_mean_JIT( leader_states[i], leader_weights[i] )  
@@ -241,11 +250,12 @@ class FORESEE(Node):
             reward = reward + traced_unicycle_reward_UT_Mean_Evaluator_basic( follower_states[i+1], leader_states[i+1], leader_weights[i+1])
             
             tp = tp + self.dt_outer
-
         reward.sum().backward(retain_graph=True)
 
         alpha_grad = getGrad( alpha_torch, l_bound = -2, u_bound = 2 )
         k_grad = getGrad( k_torch, l_bound = -2, u_bound = 2 )
+
+        print(f"reward:{reward}, alpha_grad:{alpha_grad}, k_grad:{k_grad} ") 
 
         self.controller_alpha_torch = self.controller_alpha_torch + self.lr_rate * alpha_grad
         self.controller_k_torch = self.controller_k_torch + self.lr_rate * k_grad        
@@ -276,7 +286,8 @@ class FORESEE(Node):
             leader_pose_dot = torch.tensor( [0,0], dtype=torch.float ).reshape(-1,1)
         else:
             # print(f"using GP")
-            cur_t = torch.tensor( np.float32( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 ), dtype = torch.float )
+            cur_t = torch.tensor( np.float64( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 ), dtype = torch.float )
+            # print(f"from controller input_x:{cur_t}, gp x:{self.gp.train_inputs}")
             prediction = self.gp( cur_t.reshape(1,-1) )
             leader_pose_dot = prediction.mean.reshape(-1,1)
 
@@ -296,14 +307,14 @@ class FORESEE(Node):
         wz = np.clip( wz, -2.0, 2.0 )
 
         print(f"Commanding velocity u:{vx}, omega:{wz}: yaw:{yaw}, u_ref:{ u_ref.T }, alpha:{self.controller_alpha_torch}, k:{self.controller_k_torch}")
-        self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
+        # self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
 
         
 
-        # vx = 0.0
-        # wz = 0.0
-        # self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
-        # self.robots[1].command_velocity( np.array([0,vx,0,0,wz]) )
+        vx = 0.0
+        wz = 0.0
+        self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
+        self.robots[1].command_velocity( np.array([0,vx,0,0,wz]) )
 
 
 def main(args=None):

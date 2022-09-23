@@ -21,7 +21,7 @@ def get_mean_JIT(sigma_points, weights):
     weighted_points = sigma_points * weights[0]
     mu = torch.sum( weighted_points, 1 ).reshape(-1,1)
     return mu
-traced_get_mean_JIT = torch.jit.trace( get_mean_JIT, (torch.ones(2,5), torch.ones(1,5) ) )
+traced_get_mean_JIT = torch.jit.trace( get_mean_JIT, (torch.ones(2,5, dtype=torch.float), torch.ones(1,5, dtype=torch.float) ) )
 
 def generate_sigma_points5_JIT( mu, cov_root ):
     
@@ -43,9 +43,9 @@ def generate_sigma_points5_JIT( mu, cov_root ):
 
     return new_points, new_weights
 
-mu_t = torch.ones((2,1)).reshape(-1,1)
+mu_t = torch.ones((2,1), dtype=torch.float).reshape(-1,1)
 cov_t = torch.tensor([ [ 1.0, 0.0 ], [0.0, 3.0] ])
-traced_generate_sigma_points5_JIT = generate_sigma_points5_JIT #torch.jit.trace( generate_sigma_points5_JIT, ( mu_t, cov_t ) )
+traced_generate_sigma_points5_JIT = torch.jit.trace( generate_sigma_points5_JIT, ( mu_t, cov_t ) )
 
 def get_ut_cov_root(cov):
     k = 2
@@ -76,13 +76,13 @@ def get_ut_cov_root_diagonal(cov):
     return root_term
 
 # @torch.jit.script
-def sigma_point_expand_JIT(robot_state, sigma_points, weights, cur_t, noise, gp):
+def sigma_point_expand_JIT(robot_state, sigma_points, weights, cur_t, gp):
    
     n, N = sigma_points.shape
     # mu, cov = traced_leader_predict_jit(cur_t, noise)  
-
     # input_x = torch.cat( sigma_points[0,0], sigma_points[1,0], torch.cos(sigma_points[2,0]), torch.sin(sigma_points[2,0]) )
-    input_x = cur_t
+    input_x = cur_t.reshape(1,-1)
+    # print(f"input_x:{input_x}, gp x:{gp.train_inputs}")
     prediction = gp( input_x )
     mu, cov = prediction.mean.reshape(-1,1), prediction.covariance_matrix      
     root_term = get_ut_cov_root_diagonal(cov) 
@@ -90,10 +90,12 @@ def sigma_point_expand_JIT(robot_state, sigma_points, weights, cur_t, noise, gp)
     temp_points, temp_weights = traced_generate_sigma_points5_JIT( mu, root_term )
     new_points = torch.clone( temp_points )
     new_weights = (torch.clone( temp_weights ) * weights[0,0]).reshape(1,-1)
-        
+
     for i in range(1,N):
+        # print(f" new_points:{new_points}, new_weights:{new_weights} ")
         # input_x = torch.cat( (sigma_points[0,i], sigma_points[1,i], torch.cos(sigma_points[2,i]), torch.sin(sigma_points[2,i])) )
-        input_x = cur_t
+        # input_x = cur_t
+        input_x = cur_t.reshape(1,-1)
         prediction = gp( input_x )
         mu, cov = prediction.mean.reshape(-1,1), prediction.covariance_matrix      
         root_term = get_ut_cov_root_diagonal(cov)
@@ -121,7 +123,7 @@ def sigma_point_scale_up5_JIT( sigma_points, weights ):
         new_weights = torch.cat( (new_weights, weights[0,i].repeat( [1,scale_factor] )/scale_factor  ), dim=1 )
               
     return new_points, new_weights
-traced_sigma_point_scale_up5_JIT = torch.jit.trace( sigma_point_scale_up5_JIT, ( torch.ones( 2, 5 ), 0.2 * torch.ones( 1, 5 ) ) )
+traced_sigma_point_scale_up5_JIT = torch.jit.trace( sigma_point_scale_up5_JIT, ( torch.ones( 2, 5, dtype=torch.float ), 0.2 * torch.ones( 1, 5, dtype=torch.float ) ) )
     
 def initialize_sigma_points2_JIT(X):
     # return 2N + 1 points
@@ -156,7 +158,7 @@ def unicycle_SI2D_UT_Mean_Evaluator(  robotJ_state, robotK_sigma_points, robotK_
         mu_A = mu_A + A * robotK_weights[0,i]
         mu_B = mu_B + B * robotK_weights[0,i]
     return mu_A, mu_B
-traced_unicycle_SI2D_UT_Mean_Evaluator = torch.jit.trace(unicycle_SI2D_UT_Mean_Evaluator, (torch.ones(3,1), torch.ones(2,25), torch.ones(2,25), 1.0/25.0 * torch.ones(1,25), torch.tensor(1.0, requires_grad = True), torch.ones(3,1, requires_grad = True) ))
+traced_unicycle_SI2D_UT_Mean_Evaluator = torch.jit.trace(unicycle_SI2D_UT_Mean_Evaluator, ( torch.ones(3,1, dtype=torch.float), torch.ones(2,25, dtype=torch.float), torch.ones(2,25, dtype=torch.float), 1.0/25.0 * torch.ones(1,25, dtype=torch.float), torch.tensor(1.0, dtype=torch.float, requires_grad = True), torch.ones(3,1, dtype=torch.float, requires_grad = True) ))
 
 # @torch.jit.script
 def unicycle_reward_UT_Mean_Evaluator_basic(robotJ_state, robotK_sigma_points, robotK_weights):
@@ -165,4 +167,4 @@ def unicycle_reward_UT_Mean_Evaluator_basic(robotJ_state, robotK_sigma_points, r
         mu = mu + unicycle_compute_reward_jit( robotJ_state, robotK_sigma_points[:,i].reshape(-1,1)  ) *  robotK_weights[0,i]
     return mu
 
-traced_unicycle_reward_UT_Mean_Evaluator_basic = torch.jit.trace( unicycle_reward_UT_Mean_Evaluator_basic, ( torch.ones(3,1), torch.ones(2,5), torch.ones(1,5) ) )
+traced_unicycle_reward_UT_Mean_Evaluator_basic = torch.jit.trace( unicycle_reward_UT_Mean_Evaluator_basic, ( torch.ones(3,1, dtype=torch.float), torch.ones(2,5, dtype=torch.float), torch.ones(1,5, dtype=torch.float) ) )
