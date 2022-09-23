@@ -64,42 +64,113 @@ class FORESEE(Node):
         
         self.publisher_ = self.create_publisher(String, 'topic', 10)
 
-        # Find and send Control
-        self.timer_period_control = 0.05  # seconds
-        self.timer_control = self.create_timer(self.timer_period_control, self.control_callback)
-
-        # Update Controller
-        self.timer_period_rl = 0.2  # seconds
-        self.timer_rl = self.create_timer(self.timer_period_rl, self.rl_callback)
-        self.dt_outer = torch.tensor(0.1)
-        self.H = 10
-
-        # GP Fit
-        self.timer_period_leader_estimator = 0.2
-        self.timer_estimator = self.create_timer( self.timer_period_leader_estimator, self.estimator_callback() )
-
-        # Store Observed Data
-        self.timer_period_leader_observer = 0.05
-        self.timer_observer = self.create_timer( self.timer_period_leader_observer, self.observer_callback() )
-        
-        self.i = 0
+        # Observer
+        self.leader_pose = np.array([0,0,0]).reshape(-1,1)
+        self.leader_pose_previous = np.array([0,0,0]).reshape(-1,1)
+        self.observer_init = False
 
         # Control Parameters
+        self.i = 0
         self.controller_k_torch = torch.tensor(1.0, dtype=torch.float)
         self.controller_alpha_torch = torch.tensor(np.array([0.3,0.3,0.3]), dtype=torch.float)
-
-        # Observer
-        self.leader_pose = np.array([0,0,1,0]).reshape(1,-1)
-        self.leader_pose_previous = np.array([0,0,1,0]).reshape(1,-1)
+        self.t0 = robots[1].get_current_timestamp_us() / 1000000.0
 
         # Estimator
         self.likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=3)
-        self.train_x = np.array( [ 0, 0, 1.0, 0.0 ] ).reshape(1,-1)
-        self.train_y = np.array( [ 0, 0] ).reshape(1, -1)
-        self.gp = MultitaskGPModel(self.train_x, self.train_y, self.likelihood)
-        self.queue = queue()      
+        # self.train_x = np.array( [ 0, 0, 1.0, 0.0 ] ).reshape(1,-1)
+        self.train_x = np.array( [ 0 ] ).reshape(1,-1)
+        self.train_y = np.array( [ 0, 0, 0] ).reshape(1, -1)
+        self.gp = MultitaskGPModel(torch.tensor(self.train_x, dtype=torch.float), torch.tensor(self.train_y, dtype=torch.float), self.likelihood)
+        # self.queue = queue()     
+
+        ###### Callbacks ############
+
+        # Find and send Control for rover 7
+        self.timer_period_control = 0.05  # seconds
+        self.timer_control = self.create_timer(self.timer_period_control, self.control_callback)
+
+        # Move the leader
+        self.timer_period_leader_control = 0.05  # seconds
+        self.timer_leader_control = self.create_timer(self.timer_period_leader_control, self.leader_control_callback)
+
+        # Store Observed Data
+        self.timer_period_leader_observer = 0.05
+        self.timer_observer = self.create_timer( self.timer_period_leader_observer, self.observer_callback )
+
+        # GP Fit
+        self.timer_period_leader_estimator = 0.2
+        self.timer_estimator = self.create_timer( self.timer_period_leader_estimator, self.estimator_callback )
+
+        # Update Controller
+        # self.timer_period_rl = 0.2  # seconds
+        # self.timer_rl = self.create_timer(self.timer_period_rl, self.rl_callback)
+        # self.dt_outer = torch.tensor(0.1)
+        # self.H = 10 
+
+    def leader_control_callback(self):
+        t = np.float32( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 )
+        R = 1.5
+        omega = np.pi/3
+        x = R * np.cos( omega * t ) - 1.0
+        y = R * np.sin( omega * t )
+        vx = omega * R 
+        # print(f"x:{vx}, omega:{omega}")
+        # self.robots[1].command_position( np.array([x, y, 0, 0, 0]) )
+        self.robots[1].command_velocity(np.array([0, vx, 0, 0, omega]) )
+
+    def observer_callback(self):
+        dt = 0.05
+
+        self.leader_pose_previous = np.copy( self.leader_pose )
+
+        leader_pos = self.robots[1].get_world_position()
+        leader_quat = self.robots[1].get_body_quaternion()
+        leader_yaw = 2.0 * np.arctan2( leader_quat[0], leader_quat[3] )
+        self.leader_pose = np.append( leader_pos[0:2], leader_yaw  ).reshape(-1,1)
+
+        if not self.observer_init:
+            self.leader_pose_previous = np.copy( self.leader_pose )
+            self.observer_init = True
+
+        diff = self.leader_pose - self.leader_pose_previous
+        # print(f"diff:{diff}")
+        diff[2] = wrap_angle_numpy( diff[2,0] )
+        new_y = diff / self.timer_period_leader_observer
+
+        # new_x = np.array([ leader_pos[0], leader_pos[1], np.cos( leader_yaw ), np.sin( leader_yaw ) ])
+        new_x = np.float32( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 )
+
+        self.train_x = np.append( self.train_x,  new_x.reshape(1,-1), axis = 0 )
+        self.train_y = np.append( self.train_y,  new_y.reshape(1,-1), axis = 0 )
+
+        # print(f"train x:{ self.train_x }, y:{ self.train_y }")
+
+    def estimator_callback(self):
+ 
+        data_horizon = 3
+        num_data = int( data_horizon / self.timer_period_leader_observer )
+        
+        train_x = np.copy( self.train_x[-num_data:, :] )
+        train_y = np.copy( self.train_y[-num_data:, :] )
+
+        # idxs  = np.random.randint(np.shape( train_x )[0], size=min( np.shape(train_x)[0], 100 ) )
+        idxs = np.random.choice(np.shape( train_x )[0], min( np.shape(train_x)[0], 100 ), replace=False)
+        self.train_x = train_x[idxs, :]
+        self.train_y = train_y[idxs, :]
+
+        print(f"num_data: {num_data}, train_x size: {np.shape(train_x)[0]} ")
+
+        # print(f" size:{np.shape( train_x )[0]}, train_x:{train_x} , selected:{idxs}, selected: {train_x[idxs, :]}")
+
+        self.gp.set_train_data( torch.tensor( self.train_x, dtype = torch.float ), torch.tensor( self.train_y, dtype=torch.float ), strict = False)
+
+        # self.gp.train_x = torch.tensor( train_x[idxs, :] )
+        # self.gp.train_y = torch.tensor( train_y[idxs, :] )
+
+        train_gp(self.gp, self.likelihood, torch.tensor(self.train_x, dtype=torch.float), torch.tensor(self.train_y, dtype=torch.float), training_iterations = 10)
+
     
-    def rl_callback():
+    def rl_callback(self):
         alpha_torch = torch.clone( self.controller_alpha_torch )
         k_torch = torch.clone( self.controller_k_torch )
 
@@ -155,41 +226,7 @@ class FORESEE(Node):
         k_grad = getGrad( k_torch, l_bound = -2, u_bound = 2 )
 
         self.controller_alpha_torch = self.controller_alpha_torch + self.lr_rate * alpha_grad
-        self.controller_k_torch = self.controller_k_torch + self.lr_rate * k_grad
-
-    def observer_callback():
-        dt = 0.05
-
-        self.leader_pose_previous = np.copy( self.leader_pose )
-
-        leader_pos = self.robots[1].get_world_position()
-        leader_quat = self.robots[1].get_body_quaternion()
-        leader_yaw = 2.0 * np.arctan2( leader_quat[0], leader_quat[3] )
-        self.leader_pose = np.append( leader_pos[0:2], leader_yaw  )
-
-        diff = self.leader_pos - self.leader_pos_previous
-        diff[2] = wrap_angle( diff[2] )
-        new_y = diff / self.timer_period_leader_observer
-
-        # new_x = np.array([ leader_pos[0], leader_pos[1], np.cos( leader_yaw ), np.sin( leader_yaw ) ])
-        new_x = robots[1].get_current_timestamp_us() / 1000000.0
-
-        self.x_train = np.append( self.x_train,  new_x.reshape(1,-1), axis = 0 )
-        self.y_train = np.append( self.y_train,  new_y.reshape(1,-1), axis = 0 )
-
-    def estimator_callback():
-        data_horizon = 3
-        num_data = data_horizon / self.timer_period_leader_estimator
-        train_x = np.copy( self.train_x[-num_data:, :] )
-        train_y = np.copy( self.train_y[-num_data:, :] )
-
-        idxs  = np.random.randint(np.shape( train_x )[0], size=np.min( np.shape(train_x)[0], 100 ) )
-        self.train_x = train_x[idxs, :]
-        self.train_y = train_y[idxs, :]
-
-        train_gp(self.gp, self.likelihood, train_x, train_y, training_iterations = 30)
-
-        
+        self.controller_k_torch = self.controller_k_torch + self.lr_rate * k_grad        
 
     def control_callback(self):
         msg = String()
@@ -230,15 +267,15 @@ class FORESEE(Node):
         vx = np.clip( vx, -0.6, 0.6 )
         wz = np.clip( wz, -2.0, 2.0 )
 
-        print(f"Commanding velocity u:{vx}, omega:{wz}: yaw:{yaw}, u_ref:{ u_ref.T }")
-        self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
+        # print(f"Commanding velocity u:{vx}, omega:{wz}: yaw:{yaw}, u_ref:{ u_ref.T }, alpha:{self.controller_alpha_torch}, k:{self.controller_k_torch}")
+        # self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
 
         
 
-        # vx = 0.0
-        # wz = 0.0
-        # self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
-        # self.robots[1].command_velocity( np.array([0,vx,0,0,wz]) )
+        vx = 0.0
+        wz = 0.0
+        self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
+        self.robots[1].command_velocity( np.array([0,vx,0,0,wz]) )
 
 
 def main(args=None):
@@ -262,20 +299,22 @@ def main(args=None):
     robots = [robot7, robot2]
     threads = start_ros_nodes(robots)
 
+    time.sleep(2.0)
+
     robot7.set_command_mode( 'velocity' )
-    # robot2.set_command_mode( 'velocity' )
+    robot2.set_command_mode( 'velocity' )
 
     vx = 0.0
     wz = 0.0
     for i in range(100):
         robot7.command_velocity( np.array([0,vx,0,0,wz]) )
-        # robot2.command_velocity( np.array([0,vx,0,0,wz]) )
+        robot2.command_velocity( np.array([0,vx,0,0,wz]) )
         time.sleep(0.05)#rate.sleep()
 
     robot7.cmd_offboard_mode()
     robot7.arm()
-    # robot2.cmd_offboard_mode()
-    # robot2.arm()
+    robot2.cmd_offboard_mode()
+    robot2.arm()
     
     #############################
 
