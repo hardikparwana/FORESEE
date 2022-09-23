@@ -76,11 +76,14 @@ class FORESEE(Node):
         self.t0 = robots[1].get_current_timestamp_us() / 1000000.0
 
         # Estimator
-        self.likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=3)
+        self.likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=2)
         # self.train_x = np.array( [ 0, 0, 1.0, 0.0 ] ).reshape(1,-1)
         self.train_x = np.array( [ 0 ] ).reshape(1,-1)
-        self.train_y = np.array( [ 0, 0, 0] ).reshape(1, -1)
-        self.gp = MultitaskGPModel(torch.tensor(self.train_x, dtype=torch.float), torch.tensor(self.train_y, dtype=torch.float), self.likelihood)
+        self.train_y = np.array( [ 0, 0 ] ).reshape(1, -1)
+        self.gp = MultitaskGPModel(torch.tensor(self.train_x, dtype=torch.float), torch.tensor(self.train_y, dtype=torch.float), self.likelihood, num_tasks=2)
+        self.gp.eval()
+        self.likelihood.eval()
+        self.estimator_init = False
         # self.queue = queue()     
 
         ###### Callbacks ############
@@ -134,14 +137,14 @@ class FORESEE(Node):
 
         diff = self.leader_pose - self.leader_pose_previous
         # print(f"diff:{diff}")
-        diff[2] = wrap_angle_numpy( diff[2,0] )
+        diff[2,0] = wrap_angle_numpy( diff[2,0] )
         new_y = diff / self.timer_period_leader_observer
 
         # new_x = np.array([ leader_pos[0], leader_pos[1], np.cos( leader_yaw ), np.sin( leader_yaw ) ])
         new_x = np.float32( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 )
 
         self.train_x = np.append( self.train_x,  new_x.reshape(1,-1), axis = 0 )
-        self.train_y = np.append( self.train_y,  new_y.reshape(1,-1), axis = 0 )
+        self.train_y = np.append( self.train_y,  new_y[0:2].reshape(1,-1), axis = 0 )
 
         # print(f"train x:{ self.train_x }, y:{ self.train_y }")
 
@@ -153,24 +156,43 @@ class FORESEE(Node):
         train_x = np.copy( self.train_x[-num_data:, :] )
         train_y = np.copy( self.train_y[-num_data:, :] )
 
-        # idxs  = np.random.randint(np.shape( train_x )[0], size=min( np.shape(train_x)[0], 100 ) )
         idxs = np.random.choice(np.shape( train_x )[0], min( np.shape(train_x)[0], 100 ), replace=False)
-        self.train_x = train_x[idxs, :]
-        self.train_y = train_y[idxs, :]
+        # self.train_x = train_x[idxs, :]
+        # self.train_y = train_y[idxs, :]
 
-        print(f"num_data: {num_data}, train_x size: {np.shape(train_x)[0]} ")
+        # print(f"num_data: {num_data}, train_x size: {np.shape(train_x)[0]} ")
 
         # print(f" size:{np.shape( train_x )[0]}, train_x:{train_x} , selected:{idxs}, selected: {train_x[idxs, :]}")
+        # self.train_x = np.array( [ 0, 0, 1.0, 0.0 ] ).reshape(1,-1)
 
-        self.gp.set_train_data( torch.tensor( self.train_x, dtype = torch.float ), torch.tensor( self.train_y, dtype=torch.float ), strict = False)
+        # Keep
+        # self.gp.set_train_data( torch.tensor( self.train_x, dtype = torch.float ), torch.tensor( self.train_y, dtype=torch.float ), strict = False)
+        #  self.gp.set_train_data( train_x_torch, train_y_torch, strict = False)
+        # train_gp(self.gp,self.likelihood, train_x_torch, train_y_torch, training_iterations = 10)
 
-        # self.gp.train_x = torch.tensor( train_x[idxs, :] )
-        # self.gp.train_y = torch.tensor( train_y[idxs, :] )
+        train_x_torch = torch.tensor(train_x[idxs, :], dtype=torch.float)
+        train_y_torch = torch.tensor(train_y[idxs, :], dtype=torch.float)
 
-        train_gp(self.gp, self.likelihood, torch.tensor(self.train_x, dtype=torch.float), torch.tensor(self.train_y, dtype=torch.float), training_iterations = 10)
+        likelihood_temp = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=2)    
+        gp_temp = MultitaskGPModel(train_x_torch, train_y_torch, likelihood_temp, num_tasks=2)
+        for param_name, param in self.gp.named_parameters():
+            gp_temp.initialize( **{ param_name:torch.clone( param ) } )
 
+        train_gp(gp_temp,likelihood_temp, train_x_torch, train_y_torch, training_iterations = 10)
+        
+        # Copy GP back from temp to original
+        self.gp.set_train_data( train_x_torch, train_y_torch, strict = False)
+        for param_name, param in gp_temp.named_parameters():
+            self.gp.initialize( **{ param_name:torch.clone( param ) } )
+
+        self.estimator_init = True
+
+        
     
     def rl_callback(self):
+
+        if not self.estimator_init:
+            return
         alpha_torch = torch.clone( self.controller_alpha_torch )
         k_torch = torch.clone( self.controller_k_torch )
 
@@ -250,7 +272,13 @@ class FORESEE(Node):
         alpha_torch = torch.clone( self.controller_alpha_torch )
         k_torch = torch.clone( self.controller_k_torch )
 
-        leader_pose_dot = torch.tensor( [0,0], dtype=torch.float ).reshape(-1,1)
+        if not self.estimator_init:
+            leader_pose_dot = torch.tensor( [0,0], dtype=torch.float ).reshape(-1,1)
+        else:
+            # print(f"using GP")
+            cur_t = torch.tensor( np.float32( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 ), dtype = torch.float )
+            prediction = self.gp( cur_t.reshape(1,-1) )
+            leader_pose_dot = prediction.mean.reshape(-1,1)
 
         A, b = unicycle_SI2D_clf_cbf_fov_evaluator(torch.tensor(pose, dtype=torch.float).reshape(-1,1), torch.tensor( leader_pose, dtype=torch.float).reshape(-1,1), leader_pose_dot, k_torch, alpha_torch)
         u_ref = unicycle_nominal_input_tensor_jit( torch.tensor(pose, dtype=torch.float).reshape(-1,1), torch.tensor( leader_pose, dtype=torch.float ).reshape(-1,1) )
@@ -267,15 +295,15 @@ class FORESEE(Node):
         vx = np.clip( vx, -0.6, 0.6 )
         wz = np.clip( wz, -2.0, 2.0 )
 
-        # print(f"Commanding velocity u:{vx}, omega:{wz}: yaw:{yaw}, u_ref:{ u_ref.T }, alpha:{self.controller_alpha_torch}, k:{self.controller_k_torch}")
-        # self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
+        print(f"Commanding velocity u:{vx}, omega:{wz}: yaw:{yaw}, u_ref:{ u_ref.T }, alpha:{self.controller_alpha_torch}, k:{self.controller_k_torch}")
+        self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
 
         
 
-        vx = 0.0
-        wz = 0.0
-        self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
-        self.robots[1].command_velocity( np.array([0,vx,0,0,wz]) )
+        # vx = 0.0
+        # wz = 0.0
+        # self.robots[0].command_velocity( np.array([0,vx,0,0,wz]) )
+        # self.robots[1].command_velocity( np.array([0,vx,0,0,wz]) )
 
 
 def main(args=None):

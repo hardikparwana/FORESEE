@@ -2,13 +2,13 @@ import gpytorch
 import torch
 
 class MultitaskGPModel(gpytorch.models.ExactGP):
-    def __init__(self, train_x, train_y, likelihood):
+    def __init__(self, train_x, train_y, likelihood, num_tasks):
         super(MultitaskGPModel, self).__init__(train_x, train_y, likelihood)
         self.mean_module = gpytorch.means.MultitaskMean(
-            gpytorch.means.ConstantMean(), num_tasks=3
+            gpytorch.means.ConstantMean(), num_tasks=num_tasks
         )
         self.covar_module = gpytorch.kernels.MultitaskKernel(
-            gpytorch.kernels.RBFKernel() *  gpytorch.kernels.LinearKernel() *  gpytorch.kernels.LinearKernel(), num_tasks=3, rank=1
+            gpytorch.kernels.RBFKernel() *  gpytorch.kernels.LinearKernel() *  gpytorch.kernels.LinearKernel(), num_tasks=num_tasks, rank=1
         )
 
     def forward(self, x):
