@@ -93,12 +93,12 @@ class FORESEE(Node):
         ###### Callbacks ############
 
         # Find and send Control for rover 7
-        self.timer_period_control = 0.05  # seconds
-        self.timer_control = self.create_timer(self.timer_period_control, self.control_callback)
+        # self.timer_period_control = 0.05  # seconds
+        # self.timer_control = self.create_timer(self.timer_period_control, self.control_callback)
 
         # Move the leader
-        # self.timer_period_leader_control = 0.05  # seconds
-        # self.timer_leader_control = self.create_timer(self.timer_period_leader_control, self.leader_control_callback)
+        self.timer_period_leader_control = 0.05  # seconds
+        self.timer_leader_control = self.create_timer(self.timer_period_leader_control, self.leader_control_callback)
 
         # Store Observed Data
         self.timer_period_leader_observer = 0.05
@@ -108,20 +108,66 @@ class FORESEE(Node):
         self.timer_period_leader_estimator = 0.2
         self.timer_estimator = self.create_timer( self.timer_period_leader_estimator, self.estimator_callback )
 
-        # Update Controller # no 7
-        self.timer_period_rl = 0.4  # seconds
-        self.timer_rl = self.create_timer(self.timer_period_rl, self.rl_callback)
-        self.dt_outer = torch.tensor(0.1, dtype=torch.float)
-        self.H = 8 
+        # Update Controller
+        # self.timer_period_rl = 0.4  # seconds
+        # self.timer_rl = self.create_timer(self.timer_period_rl, self.rl_callback)
+        # self.dt_outer = torch.tensor(0.1, dtype=torch.float)
+        # self.H = 10 
+
+    def position_controller(self, leader_pos, leader_yaw, waypoint):
+        diff = waypoint - leader_pos
+        desired_heading = np.arctan2( diff[1]/np.linalg.norm(diff), diff[0]/np.linalg.norm(diff) )
+        print(f"desired heading:{desired_heading}, yaw:{leader_yaw}")
+        actual_heading = leader_yaw
+        heading_error = wrap_angle_numpy( desired_heading - actual_heading )
+        omega = 3.0 * heading_error
+        vx = 4.0 * np.cos(heading_error) * np.linalg.norm(diff)
+        return vx, omega
 
     def leader_control_callback(self):
+
+        waypoint1 = np.array([ -1.45, 1.250 ])
+        t1 = 3.0
+        waypoint2 = np.array([ -2.25, -1.169 ])
+        t2 = 3.0
+        waypoint3 = np.array([ 0.7, -1.74 ])
+        t3 = 3.0
+        waypoint4 = np.array([ 2.056, 0.534 ])
+        t4 = 3.0
+
+        leader_pos = self.robots[1].get_world_position()
+        leader_pos = leader_pos[0:2]
+        leader_quat = self.robots[1].get_body_quaternion()
+        leader_yaw = 2.0 * np.arctan2( leader_quat[3], leader_quat[0] )
         t = np.float32( self.robots[1].get_current_timestamp_us() / 1000000.0 - self.t0 )
-        R = 0.8
-        omega = np.pi/6
-        x = R * np.cos( omega * t ) - 1.0
-        y = R * np.sin( omega * t )
-        vx = omega * R 
-        # print(f"x:{vx}, omega:{omega}")
+
+        if t < t1:
+            vx, omega = self.position_controller( leader_pos, leader_yaw, waypoint1 )
+        elif t < t2:
+            vx, omega = self.position_controller( leader_pos, leader_yaw, waypoint2 )
+        elif t < t3:
+            vx, omega = self.position_controller( leader_pos, leader_yaw, waypoint3 )
+        elif t < t4:
+            vx, omega = self.position_controller( leader_pos, leader_yaw, waypoint4 )
+        else:
+            omega = np.pi/6
+            R = 0.8
+            vx = omega * R
+
+        # vx = 0
+        # omega = 0
+
+        vx = np.clip( vx, -1.3, 1.3 )
+        omega = np.clip( omega, -3.0, 3.0 )
+
+        
+        # R = 0.8
+        # omega = np.pi/6
+        # x = R * np.cos( omega * t ) - 1.0
+        # y = R * np.sin( omega * t )
+        # vx = omega * R 
+
+        print(f"t: {t}, x:{vx}, omega:{omega}")
         # self.robots[1].command_position( np.array([x, y, 0, 0, 0]) )
         # vx = 0
         # omega = 0
@@ -134,7 +180,7 @@ class FORESEE(Node):
 
         leader_pos = self.robots[1].get_world_position()
         leader_quat = self.robots[1].get_body_quaternion()
-        leader_yaw = 2.0 * np.arctan2( leader_quat[0], leader_quat[3] )
+        leader_yaw = 2.0 * np.arctan2( leader_quat[3], leader_quat[0] )
         self.leader_pose = np.append( leader_pos[0:2], leader_yaw  ).reshape(-1,1)
 
         if not self.observer_init:
@@ -156,7 +202,7 @@ class FORESEE(Node):
 
     def estimator_callback(self):
  
-        data_horizon = 1.5
+        data_horizon = 3
         num_data = int( data_horizon / self.timer_period_leader_observer )
         
         train_x = np.copy( self.train_x[-num_data:, :] )
@@ -288,7 +334,7 @@ class FORESEE(Node):
 
         leader_pos = self.robots[1].get_world_position()
         leader_quat = self.robots[1].get_body_quaternion()
-        leader_yaw = 2.0 * np.arctan2( leader_quat[3], leader_quat[0] )
+        leader_yaw = 2.0 * np.arctan2( leader_quat[0], leader_quat[3] )
         leader_pose = leader_pos[0:2] #np.array( [ leader_pos[0], leader_pos[1], leader_yaw ] )
         # print(f"leader pos: { leader_pos }")
 
@@ -352,31 +398,31 @@ def main(args=None):
     time.sleep(2.0)
 
     robot7.set_command_mode( 'velocity' )
-    # robot2.set_command_mode( 'velocity' )
+    robot2.set_command_mode( 'velocity' )
 
     vx = 0.0
     wz = 0.0
     for i in range(100):
         robot7.command_velocity( np.array([0,vx,0,0,wz]) )
-        # robot2.command_velocity( np.array([0,vx,0,0,wz]) )
+        robot2.command_velocity( np.array([0,vx,0,0,wz]) )
         time.sleep(0.05)#rate.sleep()
 
     robot7.cmd_offboard_mode()
     robot7.arm()
-    # robot2.cmd_offboard_mode()
-    # robot2.arm()
+    robot2.cmd_offboard_mode()
+    robot2.arm()
     
     #############################
 
     control_node = FORESEE(robots)
 
-    executor = MultiThreadedExecutor(num_threads=5)
-    executor.add_node(control_node)
-    executor.spin()
+    # executor = MultiThreadedExecutor(num_threads=5)
+    # executor.add_node(control_node)
+    # executor.spin()
 
-    # rclpy.spin(control_node)
+    rclpy.spin(control_node)
 
-    executor.shutdown()
+    # executor.shutdown()
     control_node.destroy_node()
     rclpy.shutdown()
 
