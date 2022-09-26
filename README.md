@@ -27,7 +27,7 @@ Our approach involves following three steps:
 In our first example, we randomly initialize the parameters of policy and then try to learn parameters online (in receding horizon fashion) that stabilizes the pole in upright position. Only a horizontal force on the cart can be applied. Only an uncertain dynamics model is available to the system. We run our algorithm for unconstrained as well as constrained cart position.
 
 https://github.com/hardikparwana/FORESEE/blob/main/cartpole_unconstrained_h20-episode-0.mp4
-
+https://raw.githubusercontent.com/hardikparwana/FORESEE/main/cartpole_unconstrained_h20-episode-0.mp4
 
 ## CBF tuning for Leader-Follower
 
