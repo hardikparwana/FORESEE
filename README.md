@@ -22,7 +22,7 @@ Our approach involves following three steps:
 ## CartPole Swingup
 
 ## CBF tuning for Leader-Follower
-file:///home/hardik/Dropbox%20(University%20of%20Michigan)/drawings/ICRA/videos/no_adapt_no_bound.gif
+![1](file:///home/hardik/Dropbox%20(University%20of%20Michigan)/drawings/ICRA/videos/no_adapt_no_bound.gif)
 
 |  | No Adaptation | With adaptation |
 | --------------| -------------------| -----------------|
