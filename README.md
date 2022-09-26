@@ -39,8 +39,8 @@ In our first example, we randomly initialize the parameters of policy and then t
 
 |  | No Adaptation | With adaptation |
 | --------------| -------------------| -----------------|
-| No input bound | ![no_adapt_no_bound](https://user-images.githubusercontent.com/19849515/192348004-6dcbf70f-2db5-49dd-9f4f-04370dc028e4.gif) | ![2](https://github.com/hardikparwana/FORESEE/blob/main/adapt_no_bound.gif) |
-| With input bounds | ![3](https://github.com/hardikparwana/FORESEE/blob/main/no_adapt_with_bound.gif) | ![4](https://github.com/hardikparwana/FORESEE/blob/main/adapt_with_bound.gif)
+| No input bound | ![no_adapt_no_bound](https://user-images.githubusercontent.com/19849515/192348004-6dcbf70f-2db5-49dd-9f4f-04370dc028e4.gif) | ![adapt_no_bound](https://user-images.githubusercontent.com/19849515/192348165-5f6fbaf4-81e1-4cd6-893f-d5f763ea9cbc.gif) |
+| With input bounds | ![no_adapt_with_bound](https://user-images.githubusercontent.com/19849515/192348231-a921fa36-6198-45b5-94c2-80ae87ab8b39.gif) | !![adapt_with_bound](https://user-images.githubusercontent.com/19849515/192348335-448600b8-042b-4bb5-8c9f-17e654584336.gif)
 
  ![1](https://github.com/hardikparwana/FORESEE/blob/main/no_adapt_no_bound.gif)
 
