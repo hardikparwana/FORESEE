@@ -26,9 +26,8 @@ Our approach involves following three steps:
 ## CartPole Swingup
 In our first example, we randomly initialize the parameters of policy and then try to learn parameters online (in receding horizon fashion) that stabilizes the pole in upright position. Only a horizontal force on the cart can be applied. Only an uncertain dynamics model is available to the system. We run our algorithm for unconstrained as well as constrained cart position.
 
-[Unconstrained Case](https://user-images.githubusercontent.com/19849515/192346260-4f0c70e6-17d6-4ad0-a211-bd56c90e54b2.mp4)
-
-[Constrained Case](https://user-images.githubusercontent.com/19849515/192346448-6c2d450f-03a1-4d46-9f1b-ab653c9f1902.mp4)
+| Constrained | Unconstrained |
+| [Unconstrained Case](https://user-images.githubusercontent.com/19849515/192346260-4f0c70e6-17d6-4ad0-a211-bd56c90e54b2.mp4) | [Constrained Case](https://user-images.githubusercontent.com/19849515/192346448-6c2d450f-03a1-4d46-9f1b-ab653c9f1902.mp4) |
 
 ## CBF tuning for Leader-Follower
 
