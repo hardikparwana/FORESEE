@@ -26,7 +26,7 @@ Our approach involves following three steps:
 |  | No Adaptation | With adaptation |
 | --------------| -------------------| -----------------|
 | No input bound | ![1](https://github.com/hardikparwana/FORESEE/blob/main/no_adapt_no_bound.gif) | ![2](https://github.com/hardikparwana/FORESEE/blob/main/adapt_no_bound.gif) |
-| With input bounds | ![3](![1](https://github.com/hardikparwana/FORESEE/blob/main/no_adapt_with_bound.gif)) | ![4](![1](https://github.com/hardikparwana/FORESEE/blob/main/adapt_with_bound.gif))
+| With input bounds | ![3](https://github.com/hardikparwana/FORESEE/blob/main/no_adapt_with_bound.gif) | ![4](https://github.com/hardikparwana/FORESEE/blob/main/adapt_with_bound.gif)
 
 
 
