@@ -26,6 +26,8 @@ Our approach involves following three steps:
 ## CartPole Swingup
 In our first example, we randomly initialize the parameters of policy and then try to learn parameters online (in receding horizon fashion) that stabilizes the pole in upright position. Only a horizontal force on the cart can be applied. Only an uncertain dynamics model is available to the system. We run our algorithm for unconstrained as well as constrained cart position.
 
+![1](https://github.com/hardikparwana/FORESEE/blob/main/cartpole_unconstrained_h20-episode-0.mp4)
+
 
 ## CBF tuning for Leader-Follower
 
@@ -36,4 +38,5 @@ In our first example, we randomly initialize the parameters of policy and then t
 
 
 
-## Experiments
+## Experiments for CBF policy based Leader Follower
+We also perform experiments with 2 AION R1 UGV rovers. The leader robot is moved manually by the user. Gaussian Process(GP) is used to learn the motion of leader as a function of time based on past observations. The GP dynamics model is then passed on to the follower that uses this model to predict future and apply our proposed algorithm.
