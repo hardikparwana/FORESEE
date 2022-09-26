@@ -1,4 +1,4 @@
-# Adversary-CBF
+# FORESEE(4C): Foresee for Certified Constrained Control
 
 
 This repository implements our ICRA 2023 submission on 
