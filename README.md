@@ -28,7 +28,7 @@ In our first example, we randomly initialize the parameters of policy and then t
 
 Unconstrained
 [Unconstrained](https://user-images.githubusercontent.com/19849515/192346260-4f0c70e6-17d6-4ad0-a211-bd56c90e54b2.mp4)
-
+h
 ## CBF tuning for Leader-Follower
 
 |  | No Adaptation | With adaptation |
