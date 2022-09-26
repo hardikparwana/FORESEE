@@ -22,13 +22,12 @@ Our approach involves following three steps:
 ## CartPole Swingup
 
 ## CBF tuning for Leader-Follower
-![1](https://github.com/hardikparwana/FORESEE/blob/main/no_adapt_no_bound.gif)
 
 |  | No Adaptation | With adaptation |
 | --------------| -------------------| -----------------|
-|  
+| No input bound | ![1](https://github.com/hardikparwana/FORESEE/blob/main/no_adapt_no_bound.gif) | ![2](https://github.com/hardikparwana/FORESEE/blob/main/adapt_no_bound.gif) |
 
-![PAPER_with_trust](https://user-images.githubusercontent.com/19849515/162593597-f028c61d-7a9d-4ff9-88b4-5851aeae1806.gif) | ![PAPER_NO_TRUST](https://user-images.githubusercontent.com/19849515/162593600-273fd93a-c82c-4655-b232-a03181672b15.gif) | ![PAPER_NO_TRUST_large_alpha](https://user-images.githubusercontent.com/19849515/162593605-af184d72-0d08-4c7e-bcdf-f88d18b42a5d.gif)
+| With input bounds | ![3](![1](https://github.com/hardikparwana/FORESEE/blob/main/no_adapt_with_bound.gif)) | ![4](![1](https://github.com/hardikparwana/FORESEE/blob/main/adapt_with_bound.gif))
 
 
 
