@@ -9,6 +9,22 @@ Authors: Hardik Parwana and Dimitra Panagou, University of Michigan
 
 Note: this repo is under development. While all the relevant code is present, we will work on making it more readable and customizable soon! Stay Tuned!
 
+## Deoendencies
+The implementation has been done in Python 3.8 at the time of writing this document. The following packages were used
+- numpy==1.22.3 
+- gym==0.26.0 
+- gym-notices==0.0.8 
+- gym-recording==0.0.1 
+- gpytorch==1.8.1 
+- scipy==1.8.0 
+- scikit-learn==1.0.2 
+- torch==1.12.1 
+- pygame==2.1.2 
+- gurobipy==9.5.1 
+- cvxpy==1.2.0 
+- cvxpylayers==0.1.5 
+- cartpole==0.0.1
+You will also have to add source directory to PYTHONPATH.
 
 ## Description
 
