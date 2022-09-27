@@ -9,7 +9,7 @@ Authors: Hardik Parwana and Dimitra Panagou, University of Michigan
 
 Note: this repo is under development. While all the relevant code is present, we will work on making it more readable and customizable soon! Stay Tuned! Please raise an issue or send me an email if you run into issues before this documentation is ready. I am happy to help adapt this algorithm to suit your needs!
 
-## Deoendencies
+## Dependencies
 The implementation has been done in Python 3.8 at the time of writing this document. PyTorch's JIT feature was used to speed up computations wherever possible. The following packages were used
 - numpy==1.22.3 
 - gym==0.26.0 
