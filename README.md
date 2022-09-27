@@ -24,6 +24,7 @@ The implementation has been done in Python 3.8 at the time of writing this docum
 - cvxpy==1.2.0 
 - cvxpylayers==0.1.5 
 - cartpole==0.0.1
+
 You will also have to add source directory to PYTHONPATH.
 
 ## Description
@@ -61,3 +62,5 @@ In our first example, we randomly initialize the parameters of policy and then t
 
 ## Experiments for CBF policy based Leader Follower
 We also perform experiments with 2 AION R1 UGV rovers. The leader robot is moved manually by the user. Gaussian Process(GP) is used to learn the motion of leader as a function of time based on past observations. The GP dynamics model is then passed on to the follower that uses this model to predict future and apply our proposed algorithm.
+
+Each AION UGV is equipped with pixhawk board running custom px4 firmware for unicycle type of velocity control.
