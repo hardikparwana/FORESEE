@@ -16,8 +16,6 @@ The implementation has been done in Python 3.8 at the time of writing this docum
 - gym-notices==0.0.8 
 - gym-recording==0.0.1 
 - gpytorch==1.8.1 
-- scipy==1.8.0 
-- scikit-learn==1.0.2 
 - torch==1.12.1 
 - pygame==2.1.2 
 - gurobipy==9.5.1 
@@ -25,7 +23,7 @@ The implementation has been done in Python 3.8 at the time of writing this docum
 - cvxpylayers==0.1.5 
 - cartpole==0.0.1
 
-You will also have to add source directory to PYTHONPATH.
+You will also have to add source directory to PYTHONPATH. Note that relevant gym environment for cartpole simulation is already part of this repo. This was done to change the discreet action space to continuous action space and to change physical properties of the objects.
 
 ## Description
 
