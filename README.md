@@ -26,6 +26,17 @@ The implementation has been done in Python 3.8 at the time of writing this docum
 
 You will also have to add source directory to PYTHONPATH. Note that relevant gym environment for cartpole simulation is already part of this repo. This was done to change the discreet action space to continuous action space and to change physical properties of the objects.
 
+## Running the Code
+We will be adding interactive jupyter notebooks soon! In the meantime, try out our scripts (comments to be addded soon!)
+To run the leader-follower example, run
+```
+python leader_follower/UT_RL_2agent_jit_simple.py
+```
+For cartpole, run
+```
+python cartpole/cartpole_UTRL_simple_offline_constrained.py
+```
+
 ## Description
 
 We aim to solve the following constrained model-based Reinforcement Learning(RL) problem.
