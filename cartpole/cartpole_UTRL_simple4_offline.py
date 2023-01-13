@@ -201,18 +201,6 @@ for i in range(800): #300
         observation, reward, terminated, truncated, info = env.step(action.item())
         env.render()
         
-        # Get training data fro GP
-        # state_next = env.get_state()
-        # state_dot = (state_next - state) / dt_inner
-        # action_np = np.array([[action.item()]])
-        # sys_state = np.append( state, action_np, axis =0 )
-        # if i==0:
-        #     train_X = np.copy( sys_state )
-        #     train_Y = np.copy( state_dot )
-        # else:
-        #     train_X = np.append( train_X, sys_state, axis = 1 )
-        #     train_Y = np.append( train_Y, state_dot, axis = 1 )
-        
         t = t + dt_inner
         
         if terminated or truncated:
@@ -242,17 +230,6 @@ for i in range(800): #300
         param_Sigma[:,0:4] = np.clip( param_Sigma[:,0:4] - lr_rate * Sigma_grad[:,0:4], 1, 3 ) 
         param_Sigma[:,4:] = np.clip( param_Sigma[:,4:] - lr_rate * Sigma_grad[:,4:], -1, 1 )
         print(f"i:{i}")
-        # param_Sigma[ = np.clip( param_Sigma - lr_rate * Sigma_grad, 0.05, 1000 ) 
-        
-        # print(f"w:{param_w}")#, mu:{param_Sigma}")
-        # param_Sigma = np.clip( param_Sigma - lr_rate * Sigma_grad, -30.0, 30.0 )
-        # Sigma = np.diag( param_Sigma[0:4] )
-        # Sigma[0,1] = param_Sigma[4]; Sigma[1,0] = param_Sigma[4]; Sigma[0,2] = param_Sigma[5]; Sigma[2,0] = param_Sigma[5]
-        # Sigma[0,3] = param_Sigma[6]; Sigma[3,0] = param_Sigma[6]; Sigma[1,2] = param_Sigma[7]; Sigma[2,1] = param_Sigma[7]
-        # Sigma[1,3] = param_Sigma[8]; Sigma[3,1] = param_Sigma[8]; Sigma[2,3] = param_Sigma[9]; Sigma[3,2] = param_Sigma[9]
-        # if np.abs(np.linalg.det(Sigma))<0.01:
-        #     print("*** ERROR******: wrong covariance matrix")
-    
         
 # env.close_video_recorder()
 env.close()

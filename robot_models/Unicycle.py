@@ -42,8 +42,8 @@ class Unicycle:
             self.body = ax.scatter([],[],alpha=palpha,s=40,facecolors='none',edgecolors=color) #,c=color
             self.radii = 0.5
             self.palpha = palpha
-            if palpha==1:
-                self.axis = ax.plot([self.X[0,0],self.X[0,0]+self.radii*np.cos(self.X[2,0])],[self.X[1,0],self.X[1,0]+self.radii*np.sin(self.X[2,0])])
+            # if palpha==1:
+            #     self.axis = ax.plot([self.X[0,0],self.X[0,0]+self.radii*np.cos(self.X[2,0])],[self.X[1,0],self.X[1,0]+self.radii*np.sin(self.X[2,0])])
             self.render_plot()
             
             # self.body_nominal = ax.scatter([],[],alpha=0.1,s=40,facecolors='none',edgecolors=color) #,c=color
@@ -150,7 +150,7 @@ class Unicycle:
                 self.Us = np.append(self.Us,self.U,axis=1)
                 self.Xdots = np.append( self.Xdots, Xdot , axis=1 )
             
-            self.render_plot()
+            # self.render_plot()
             self.render_plot_fov()
             
             return self.X
@@ -170,10 +170,10 @@ class Unicycle:
         if self.plot:
             if mode=='actual':
                 x = np.array([self.X[0,0],self.X[1,0]])
-                self.body.set_offsets([x[0],x[1]])
-                if self.palpha==1:
-                    self.axis[0].set_ydata([self.X[1,0],self.X[1,0]+self.radii*np.sin(self.X[2,0])])
-                    self.axis[0].set_xdata( [self.X[0,0],self.X[0,0]+self.radii*np.cos(self.X[2,0])] )
+                # self.body.set_offsets([x[0],x[1]])
+                # if self.palpha==1:
+                #     self.axis[0].set_ydata([self.X[1,0],self.X[1,0]+self.radii*np.sin(self.X[2,0])])
+                #     self.axis[0].set_xdata( [self.X[0,0],self.X[0,0]+self.radii*np.cos(self.X[2,0])] )
             elif mode=='nominal':
                 x = np.array([self.X_nominal[0,0],self.X_nominal[1,0]])
                 self.body_nominal.set_offsets([x[0],x[1]])

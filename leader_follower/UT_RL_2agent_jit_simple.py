@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 plt.rcParams.update({'font.size': 10})
+from tempfile import TemporaryFile
 
 import cvxpy as cp
 from cvxpylayers.torch import CvxpyLayer
@@ -20,7 +21,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
 warnings.filterwarnings("ignore", category=torch.jit.TracerWarning) 
 
-
+outfile = TemporaryFile()
 #############################################################
 # CBF Controller: centralized
 u1_max = 2.5#2.0# 3.0
@@ -183,8 +184,8 @@ follower_init_pose = np.array([0,0,np.pi*0.0])
 leader_init_pose = np.array([0.4,0])
 
 
-plot_x_lim = (0,10)
-plot_y_lim = (-4,4)
+plot_x_lim = (0,6)  #(0,10)
+plot_y_lim = (-3,3) #(-4,4)
 
 
 
@@ -298,8 +299,12 @@ def simulate_scenario(movie_name = 'test.mp4', adapt = False, noise = 0.1, enfor
                 if np.any( deltas.detach().numpy() > 0.01 ) and enforce_input_constraints:
                     print("Solution failed")
                     return fig, ax, follower, leader, step_rewards_adapt
-                # print(f"u_follower:{solution}")
-                follower.step(solution.detach().numpy(), dt_inner)
+                    solution = solution.detach().numpy()
+                    solution[0,0] = np.clip( solution[0,0], -u1_max, u1_max )
+                    solution[1,0] = np.clip( solution[1,0], -u2_max, u2_max )
+                else:
+                    # print(f"u_follower:{solution}")
+                    follower.step(solution.detach().numpy(), dt_inner)
                 follower.ks_u = np.append( follower.ks_u, follower.k )
                 follower.alphas_u = np.append( follower.alphas_u, follower.alpha, axis=1 )
                 
@@ -341,10 +346,10 @@ def simulate_scenario(movie_name = 'test.mp4', adapt = False, noise = 0.1, enfor
 noise  = 1.0 #0.5
 save_plot = True
 
-fig1, ax1, follower1, leader1, rewards1 = simulate_scenario( movie_name = 'test.mp4', adapt = False, noise = 0.0, enforce_input_constraints=False )  
-fig2, ax2, follower2, leader2, rewards2 = simulate_scenario( movie_name = 'test.mp4', adapt = True, noise = 0.0, enforce_input_constraints=False )  
-fig3, ax3, follower3, leader3, rewards3 = simulate_scenario( movie_name = 'test.mp4', adapt = False, noise = 0.0, enforce_input_constraints=True )
-fig4, ax4, follower4, leader4, rewards4 = simulate_scenario( movie_name = 'test.mp4', adapt = True, noise = 0.0, enforce_input_constraints=True )
+fig1, ax1, follower1, leader1, rewards1 = simulate_scenario( movie_name = 'no_bound_no_adapt.mp4', adapt = False, noise = 0.0, enforce_input_constraints=False )  
+fig2, ax2, follower2, leader2, rewards2 = simulate_scenario( movie_name = 'adapt_no_bound.mp4', adapt = True, noise = 0.0, enforce_input_constraints=False )  
+fig3, ax3, follower3, leader3, rewards3 = simulate_scenario( movie_name = 'no_adapt_with_bound.mp4', adapt = False, noise = 0.0, enforce_input_constraints=True )
+fig4, ax4, follower4, leader4, rewards4 = simulate_scenario( movie_name = 'adapt_with_bound.mp4', adapt = True, noise = 0.0, enforce_input_constraints=True )
   
 plt.ioff()
 

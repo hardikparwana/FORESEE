@@ -10,7 +10,6 @@ torch.autograd.set_detect_anomaly(True)
 
 from utils.utils import *
 from ut_utils.ut_utilsJIT import *
-from utils.mvgp_jit import *
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel
 
@@ -137,21 +136,6 @@ def constrained_update( objective, maintain_constraints, improve_constraints, pa
         else:
             return -objective_grad.reshape(-1,1)
 
-def generate_psd_matrices():
-    n = 4
-    N = 50
-    # np.random.seed(0)
-    B = []
-    for i in range(N):
-        A = np.random.rand(n,n) 
-        A = 0.5 * ( A + A.T )
-        A = A + n * np.eye(n)
-        if i == 0:
-            B = np.copy(A).reshape( (n,n,1) )
-        else:
-            B = np.append( B, A.reshape( (n,n,1) ), axis = 2 )   
-    return B
-
 def generate_psd_params():
     n = 4
     N = 50
@@ -174,8 +158,7 @@ def generate_psd_params():
 
 # Set up environment
 env_to_render = CustomCartPoleEnv(render_mode="rgb_array")
-# env = env_to_render #RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/", name_prefix="Excartpole" )
-env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/", name_prefix="ExcartpoleSimple_constrained2_morebias_plot" )
+env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/", name_prefix="cartpole_constrained_H20" )
 observation, info = env.reset(seed=42)
 
 polemass_length, gravity, length, masspole, total_mass, tau = torch.tensor(env.polemass_length), torch.tensor(env.gravity), torch.tensor(env.length), torch.tensor(env.masspole), torch.tensor(env.total_mass), torch.tensor(env.tau)
@@ -186,8 +169,6 @@ H = 20
 np.random.seed(0)
 param_w = np.random.rand(N) - 0.5#+ 0.5#+ 2.0  #0.5 work with Lr: 5.0
 param_mu = np.random.rand(4,N) - 0.5 * np.ones((4,N)) #- 3.5 * np.ones((4,N))
-# param_Sigma = torch.rand(10)
-# param_Sigma = generate_psd_matrices()
 param_Sigma = generate_psd_params()
 
 # param_Sigma = np.random.rand(4,N)
@@ -205,11 +186,6 @@ outer_loop = 2#4#10 #2
 
 
 initialize_tensors( env, param_w, param_mu, param_Sigma )
-
-# print(f"s:{param_Sigma}, t:{torch.diag(param_Sigma)}")
-# exit()
-
-# plt.ion()
 
 Xs = np.copy(env.get_state())
 Us = []
@@ -239,19 +215,7 @@ for i in range(800): #300
         Us.append(action.item())
         
         env.render()
-        
-        # Get training data fro GP
-        # state_next = env.get_state()
-        # state_dot = (state_next - state) / dt_inner
-        # action_np = np.array([[action.item()]])
-        # sys_state = np.append( state, action_np, axis =0 )
-        # if i==0:
-        #     train_X = np.copy( sys_state )
-        #     train_Y = np.copy( state_dot )
-        # else:
-        #     train_X = np.append( train_X, sys_state, axis = 1 )
-        #     train_Y = np.append( train_Y, state_dot, axis = 1 )
-        
+ 
         t = t + dt_inner
         
         if terminated or truncated:
@@ -275,17 +239,6 @@ for i in range(800): #300
             initialize_tensors(env, param_w, param_mu, param_Sigma)
         print("Successfully made it feasible")  
 
-        # param_Sigma[ = np.clip( param_Sigma - lr_rate * Sigma_grad, 0.05, 1000 ) 
-        
-        # print(f"w:{param_w}")#, mu:{param_Sigma}")
-        # param_Sigma = np.clip( param_Sigma - lr_rate * Sigma_grad, -30.0, 30.0 )
-        # Sigma = np.diag( param_Sigma[0:4] )
-        # Sigma[0,1] = param_Sigma[4]; Sigma[1,0] = param_Sigma[4]; Sigma[0,2] = param_Sigma[5]; Sigma[2,0] = param_Sigma[5]
-        # Sigma[0,3] = param_Sigma[6]; Sigma[3,0] = param_Sigma[6]; Sigma[1,2] = param_Sigma[7]; Sigma[2,1] = param_Sigma[7]
-        # Sigma[1,3] = param_Sigma[8]; Sigma[3,1] = param_Sigma[8]; Sigma[2,3] = param_Sigma[9]; Sigma[3,2] = param_Sigma[9]
-        # if np.abs(np.linalg.det(Sigma))<0.01:
-        #     print("*** ERROR******: wrong covariance matrix")
-    
 tp1 = np.linspace( 0, dt_inner * Xs.shape[1], Xs.shape[1]  )
 figure1, axis1 = plt.subplots( 1 , 1)
 axis1.plot( tp1, Xs[0,:], 'k', label='Cart Position' )

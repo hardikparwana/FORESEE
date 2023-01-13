@@ -10,7 +10,8 @@ def unicycle_f_torch_jit(x):
 def unicycle_g_torch_jit(x):
     # return torch.tensor([ [torch.cos(x[2,0]),0.0],[torch.sin(x[2,0]),0.0],[0,1] ])
     g1 = torch.cat( (torch.cos(x[2,0]).reshape(-1,1),torch.tensor([[0]]) ), dim=1 )
-    g2 = torch.cat( ( torch.tensor([[0]]), torch.sin(x[2,0]).reshape(-1,1) ), dim=1 )
+    # g2 = torch.cat( ( torch.tensor([[0]]), torch.sin(x[2,0]).reshape(-1,1) ), dim=1 )
+    g2 = torch.cat( ( torch.sin(x[2,0]).reshape(-1,1), torch.tensor([[0]]) ), dim=1 )
     g3 = torch.tensor([[0,1]],dtype=torch.float)
     gx = torch.cat((g1,g2,g3))
     return gx

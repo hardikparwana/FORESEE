@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 from utils.sqrtm import sqrtm
-from utils.mvgp_jit import *
 from robot_models.custom_cartpole import get_state_dot_noisy_torch
 
 def get_mean_JIT(sigma_points, weights):
