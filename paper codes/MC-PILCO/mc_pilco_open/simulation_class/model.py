@@ -60,7 +60,9 @@ class Model():
             u = np.array(policy(noisy_states[i,:], t))
             inputs[i,:] = u
             # get state
-            odeint_out = odeint(self.fcn, states[i,:], [t, t+dt], args=(u,))
+            # print(f"states:{states[i,:]}, t:{t}, t+dt:{t+dt}, u:{u}")
+            odeint_out = odeint(self.fcn, states[i,:], [t, t+dt], args=(u,))            
+            # exit()
             states[i+1,:] = odeint_out[1] 
             noisy_states[i+1,:] = odeint_out[1] + np.random.randn(state_dim)*noise
 

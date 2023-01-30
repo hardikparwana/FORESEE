@@ -40,8 +40,8 @@ np.random.seed(seed)
 dtype=torch.float64
 
 # Set the device
-device=torch.device('cpu')
-# device=torch.device('cuda:0')
+# device=torch.device('cpu')
+device=torch.device('cuda:0')
 
 # Set number of computational threads
 num_threads = 1
