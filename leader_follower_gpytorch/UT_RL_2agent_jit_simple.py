@@ -159,7 +159,7 @@ def get_future_reward( follower, leader, gp, t = 0, noise = torch.tensor(0), enf
 ################################################################
 
 # Sim Parameters
-num_steps = 300#100#50#20#100#50 #100 #200 #200
+num_steps = 300#50#20#100#50 #100 #200 #200
 learn_period = 1#2
 gp_training_iter_init = 30
 # train_gp = False
