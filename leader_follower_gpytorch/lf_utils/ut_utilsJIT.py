@@ -4,6 +4,7 @@ from utils.sqrtm import sqrtm
 from robot_models.UnicycleJIT import *
 from robot_models.SingleIntegrator2D import traced_leader_predict_jit
 
+
 def get_mean_cov_JIT(sigma_points, weights):
     
     # mean
@@ -124,7 +125,8 @@ def sigma_point_scale_up5_JIT( sigma_points, weights ):
         new_weights = torch.cat( (new_weights, weights[0,i].repeat( [1,scale_factor] )/scale_factor  ), dim=1 )
               
     return new_points, new_weights
-traced_sigma_point_scale_up5_JIT = torch.jit.trace( sigma_point_scale_up5_JIT, ( torch.ones( 2, 5 ), 0.2 * torch.ones( 1, 5 ) ) )
+traced_sigma_point_scale_up5_JIT = torch.jit.trace( sigma_point_scale_up5_JIT, ( torch.ones( 2, 5, dtype=torch.float ), 0.2 * torch.ones( 1, 5, dtype=torch.float ) ) )
+    
     
 def initialize_sigma_points2_JIT(X):
     # return 2N + 1 points
@@ -137,9 +139,9 @@ def initialize_sigma_points2_JIT(X):
     weights = torch.ones((1,num_points)) * 1.0/( num_points )
     return sigma_points, weights
 
-def dh_dx_unicycle_SI2D_JIT( robotJ_state, robotK_state ):
-    h, dh_dxj, dh_dxk = unicycle_SI2D_barrier_torch_jit(robotJ_state, robotK_state)
-    return h, dh_dxj, dh_dxk
+# def dh_dx_unicycle_SI2D_JIT( robotJ_state, robotK_state ):
+#     h, dh_dxj, dh_dxk = unicycle_SI2D_barrier_torch_jit(robotJ_state, robotK_state)
+#     return h, dh_dxj, dh_dxk
 
 def cbf_condition_evaluator_unicycle_SI2D( robotJ_state, robotK_state, robotK_state_dot, alpha_torch):
     h, dh_dxj, dh_dxk = unicycle_SI2D_barrier_torch_jit(robotJ_state, robotK_state)    
@@ -205,7 +207,7 @@ def unicycle_SI2D_UT_Mean_Evaluator(  robotJ_state, robotK_sigma_points, robotK_
         mu_A = mu_A + A * robotK_weights[0,i]
         mu_B = mu_B + B * robotK_weights[0,i]
     return mu_A, mu_B
-traced_unicycle_SI2D_UT_Mean_Evaluator = torch.jit.trace(unicycle_SI2D_UT_Mean_Evaluator, (torch.ones(3,1), torch.ones(2,25), torch.ones(2,25), 1.0/25.0 * torch.ones(1,25), torch.tensor(1.0, requires_grad = True), torch.ones(3,1, requires_grad = True) ))
+traced_unicycle_SI2D_UT_Mean_Evaluator = torch.jit.trace(unicycle_SI2D_UT_Mean_Evaluator, ( torch.ones(3,1, dtype=torch.float), torch.ones(2,25, dtype=torch.float), torch.ones(2,25, dtype=torch.float), 1.0/25.0 * torch.ones(1,25, dtype=torch.float), torch.tensor(1.0, dtype=torch.float, requires_grad = True), torch.ones(3,1, dtype=torch.float, requires_grad = True) ))
 
 # @torch.jit.script
 def unicycle_reward_UT_Mean_Evaluator_basic(robotJ_state, robotK_sigma_points, robotK_weights):
@@ -214,4 +216,4 @@ def unicycle_reward_UT_Mean_Evaluator_basic(robotJ_state, robotK_sigma_points, r
         mu = mu + unicycle_compute_reward_jit( robotJ_state, robotK_sigma_points[:,i].reshape(-1,1)  ) *  robotK_weights[0,i]
     return mu
 
-traced_unicycle_reward_UT_Mean_Evaluator_basic = torch.jit.trace( unicycle_reward_UT_Mean_Evaluator_basic, ( torch.ones(3,1), torch.ones(2,5), torch.ones(1,5) ) )
+traced_unicycle_reward_UT_Mean_Evaluator_basic = torch.jit.trace( unicycle_reward_UT_Mean_Evaluator_basic, ( torch.ones(3,1, dtype=torch.float), torch.ones(2,5, dtype=torch.float), torch.ones(1,5, dtype=torch.float) ) )

@@ -10,6 +10,13 @@ def wrap_angle(angle):
     else:
         return angle
     
+def wrap_angle_numpy(angle):
+    if angle > np.pi:
+        angle = angle - 2 * np.pi
+    if angle < -np.pi:
+        angle = angle + 2 * np.pi
+    return angle
+    
 def wrap_angle_tensor(angle):
         angle_numpy = angle.detach().numpy()
         factor = torch.tensor(2*np.pi,dtype=torch.float)

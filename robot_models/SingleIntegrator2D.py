@@ -26,6 +26,7 @@ class SingleIntegrator2D:
         X0 = X0.reshape(-1,1)
         self.X = X0
         self.X_nominal = np.copy(self.X)
+        self.X_prev = np.copy(self.X)
         self.dt = dt
         self.id = id
         self.color = color
@@ -102,6 +103,7 @@ class SingleIntegrator2D:
 
         xold = np.copy(self.X)
         self.U = U.reshape(-1,1)
+        self.X_prev = np.copy(self.X)
         self.X = self.X + ( self.f() + self.g() @ self.U ) * dt
         Xdot = self.f() + self.g() @ self.U
         self.render_plot()
@@ -140,24 +142,18 @@ class SingleIntegrator2D:
         return h, dh_dxi, dh_dxj
     
     
-
+delay = 1
 def leader_motion_predict(t):
-    uL = 2.0 # 
-    vL = 3*np.sin(np.pi*t*4) #  0.1 # 1.2
-    # uL = 1
-    # vL = 1
+   
+    uL = 2.0 * np.tanh(t/delay) # 
+    vL = 3*np.sin(np.pi*t*4) * np.tanh(t/delay) #  0.1 # 1.2
     return uL, vL
 
 def leader_motion(t, noise = 0.0):
-    # uL = 0.5 + 0.5
-    # vL = 3*np.sin(np.pi*t*4) + 2.0 * np.sin(np.pi*t*4) + 0.1#  0.1 # 1.2
-    # uL = 0.5 + 0.5
-    # vL = 3*np.sin(np.pi*t*4) + 0.5#  0.1 # 1.2
-    uL = 2.0
-    vL = 3*np.sin(np.pi*t*4) # + 0.5#  0.1 # 1.2
-    
-    # uL = 1
-    # vL = 1
+    # uL = 2.0
+    # vL = 3*np.sin(np.pi*t*4) # + 0.5#  0.1 # 1.2
+    uL = 2.0 * np.tanh(t/delay) # 
+    vL = 3*np.sin(np.pi*t*4) * np.tanh(t/delay) #  0.1 # 1.2
     return uL, vL
 
 def leader_predict(t, noise = 0.0):
