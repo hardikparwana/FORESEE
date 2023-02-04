@@ -1,15 +1,15 @@
 [submodule "paper codes/deep-pilco-torch"]
-	path = paper_codes/deep-pilco-torch
+	path = paper codes/deep-pilco-torch
 	url = git@github.com:hardikparwana/deep-pilco-torch.git
 [submodule "paper codes/PILCO"]
-	path = paper_codes/PILCO
+	path = paper codes/PILCO
 	url = git@github.com:hardikparwana/PILCO.git
 [submodule "paper codes/PILCO-gpytorch"]
-	path = paper_codes/PILCO-gpytorch
+	path = paper codes/PILCO-gpytorch
 	url = git@github.com:hardikparwana/PILCO-gpytorch.git
 [submodule "paper codes/DeepPILCO"]
-	path = paper_codes/DeepPILCO
+	path = paper codes/DeepPILCO
 	url = git@github.com:hardikparwana/DeepPILCO.git
 [submodule "paper codes/pets-handful-of-trials"]
-	path = paper_codes/pets-handful-of-trials
+	path = paper codes/pets-handful-of-trials
 	url = git@github.com:hardikparwana/pets-handful-of-trials.git

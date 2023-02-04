@@ -81,7 +81,7 @@ class SingleIntegrator2D:
         self.X_org = np.copy(self.X)
         self.U_org = np.copy(self.U)
         
-        self.Xs = [] #np.copy(self.X)
+        self.Xs = np.copy(self.X)
         self.Xdots = [] #np.array([0,0]).reshape(-1,1)
         # self.Xs = X0.reshape(-1,1)
         self.Us = [] #np.array([0,0]).reshape(-1,1)
