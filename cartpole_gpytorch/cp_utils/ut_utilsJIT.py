@@ -107,13 +107,26 @@ def sigma_point_expand_JIT(sigma_points, weights, control, dt_outer, gp):#, gps)
     input_x = torch.cat( (sigma_points[:,0].reshape(-1,1),control.reshape(-1,1)), axis=0 ).reshape(1,-1)
     # input_x.sum().backward(retain_graph=True)
     # min_v = torch.min(torch.norm(gp.train_inputs[0] - input_x, dim=1))
-    # print(f"Input OK, min:{min_v}")
-    prediction = gp( input_x )
-    mu, cov = prediction.mean.reshape(-1,1), prediction.covariance_matrix      
+    # print(f"Input OK")#, min:{min_v}")
+    
+    # Old
+    # prediction = gp( input_x )
+    # mu, cov = prediction.mean.reshape(-1,1), prediction.covariance_matrix 
+    
+    # NEW
+    pred1 = gp[0]( input_x )
+    pred2 = gp[1]( input_x )
+    pred3 = gp[2]( input_x )
+    pred4 = gp[3]( input_x )
+    mu = torch.cat((pred1.mean, pred2.mean, pred3.mean, pred4.mean)).reshape(-1,1)
+    cov = torch.diag(torch.cat((torch.diagonal(pred1.covariance_matrix), torch.diagonal(pred2.covariance_matrix), torch.diagonal(pred3.covariance_matrix), torch.diagonal(pred4.covariance_matrix))))
+    
+    # print(f"mu:{mu}, cov:{cov}")     
     # mu.sum().backward(retain_graph=True)
     # print("done")
     root_term = get_ut_cov_root_diagonal(cov) 
     # print(f"input: {input_x}, Cov: {cov}")
+    # print(f"cov: {cov[0,0]}. {cov[1,1]}, {cov[2,2]}, {cov[3,3]}") 
     temp_points, temp_weights = traced_generate_sigma_points9_JIT( mu, root_term, sigma_points[:,0].reshape(-1,1), dt_outer )
     new_points = torch.clone( temp_points )
     new_weights = (torch.clone( temp_weights ) * weights[0,0]).reshape(1,-1)
@@ -121,14 +134,29 @@ def sigma_point_expand_JIT(sigma_points, weights, control, dt_outer, gp):#, gps)
     for i in range(1,N):
         
         input_x = torch.cat( (sigma_points[:,i].reshape(-1,1),control.reshape(-1,1)), axis=0 ).reshape(1,-1)
-        # input_x.sum().backward(retain_graph=True)
-        # print("Input OK")
-        prediction = gp( input_x )
-        mu, cov = prediction.mean.reshape(-1,1), prediction.covariance_matrix  
+        input_x.sum().backward(retain_graph=True)
+        # print("Input 2 OK")
+        
+        
+        # Old
+        # prediction = gp( input_x )
+        # mu, cov = prediction.mean.reshape(-1,1), prediction.covariance_matrix 
+        
+        # NEW
+        pred1 = gp[0]( input_x )
+        pred2 = gp[1]( input_x )
+        pred3 = gp[2]( input_x )
+        pred4 = gp[3]( input_x )
+        mu = torch.cat((pred1.mean, pred2.mean, pred3.mean, pred4.mean)).reshape(-1,1)
+        cov = torch.diag(torch.cat((torch.diagonal(pred1.covariance_matrix), torch.diagonal(pred2.covariance_matrix), torch.diagonal(pred3.covariance_matrix), torch.diagonal(pred4.covariance_matrix))))
+    
+        
+        
+        
         # if 1:#torch.norm(torch.diagonal(cov))>40:
         #   print(f"cov: {cov[0,0]}. {cov[1,1]}, {cov[2,2]}, {cov[3,3]}") 
-        # min_v = torch.min(torch.norm(gp.train_inputs[0] - input_x, dim=1))
-        # print(f"Input OK, min:{min_v}")
+        # # min_v = torch.min(torch.norm(gp.train_inputs[0] - input_x, dim=1))
+        # print(f"Input 2 OK")#, min:{min_v}")
         # mu.sum().backward(retain_graph=True)
         # print("done2")
         root_term = get_ut_cov_root_diagonal(cov)       

@@ -372,10 +372,17 @@ def simulate_scenario(movie_name = 'test.mp4', adapt = False, noise = 0.1, enfor
                     
                     train_gp(gp_temp,likelihood_temp, train_x_torch, train_y_torch, training_iterations = 10)
                     
-                    # Copy GP back from temp to original
+                    gp = MultitaskGPModel(train_x_torch, train_y_torch, likelihood, num_tasks=4)
+                    gp.eval()
+                    likelihood.eval()
                     gp.set_train_data( train_x_torch, train_y_torch, strict = False)
                     for param_name, param in gp_temp.named_parameters():
                         gp.initialize( **{ param_name:torch.clone( param ) } )
+                    
+                    # Copy GP back from temp to original
+                    # gp.set_train_data( train_x_torch, train_y_torch, strict = False)
+                    # for param_name, param in gp_temp.named_parameters():
+                    #     gp.initialize( **{ param_name:torch.clone( param ) } )
        
             # Low Frequency tuning
             else: 

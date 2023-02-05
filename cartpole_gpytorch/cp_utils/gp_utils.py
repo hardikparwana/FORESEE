@@ -7,8 +7,11 @@ class MultitaskGPModel(gpytorch.models.ExactGP):
         self.mean_module = gpytorch.means.MultitaskMean(
             gpytorch.means.ConstantMean(), num_tasks=num_tasks
         )
+        # self.covar_module = gpytorch.kernels.MultitaskKernel(
+        #     gpytorch.kernels.RBFKernel() *  gpytorch.kernels.LinearKernel() *  gpytorch.kernels.LinearKernel(), num_tasks=num_tasks, rank=1
+        # )
         self.covar_module = gpytorch.kernels.MultitaskKernel(
-            gpytorch.kernels.RBFKernel() *  gpytorch.kernels.LinearKernel() *  gpytorch.kernels.LinearKernel(), num_tasks=num_tasks, rank=1
+            gpytorch.kernels.RBFKernel() *  gpytorch.kernels.LinearKernel(), num_tasks=num_tasks, rank=1
         )
 
     def forward(self, x):

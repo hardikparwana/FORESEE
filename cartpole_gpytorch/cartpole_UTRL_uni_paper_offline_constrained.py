@@ -10,7 +10,8 @@ torch.autograd.set_detect_anomaly(True)
 
 from utils.utils import *
 from cp_utils.ut_utilsJIT import *
-from cp_utils.gp_utils import *
+# from cp_utils.gp_utils import *
+from cp_utils.gp_uni_utils import *
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel
 
@@ -57,9 +58,9 @@ def get_future_reward(robot, gp, params):
         
         # Get control input      
         solution = traced_policy( robot.w_torch, robot.mu_torch, robot.Sigma_torch, mean_position )
-        getGrad(params[0], l_bound = -20.0, u_bound = 20.0 )
-        getGrad(params[1], l_bound = -20.0, u_bound = 20.0 )
-        getGrad(params[2], l_bound = -20.0, u_bound = 20.0 )
+        # getGrad(params[0], l_bound = -20.0, u_bound = 20.0 )
+        # getGrad(params[1], l_bound = -20.0, u_bound = 20.0 )
+        # getGrad(params[2], l_bound = -20.0, u_bound = 20.0 )
    
         # Get expanded next state
         next_states_expanded, next_weights_expanded = sigma_point_expand_JIT( states[i], weights[i], solution, dt_outer, gp)#, gps )        
@@ -72,6 +73,7 @@ def get_future_reward(robot, gp, params):
             
         # Get reward 
         reward = reward + traced_reward_UT_Mean_Evaluator_basic( states[i+1], weights[i+1] )
+        # print("reward", reward[-1])
         
     return maintain_constraints, improve_constraints, True, reward
         
@@ -84,14 +86,14 @@ def constrained_update( objective, maintain_constraints, improve_constraints, pa
     d = cp.Variable((num_params,1))
     
     # Get Performance optimal direction
-    try:
-        objective.sum().backward(retain_graph = True) 
-        w_grad = getGrad(params[0], l_bound = -20.0, u_bound = 20.0 )
-        mu_grad = getGrad(params[1], l_bound = -20.0, u_bound = 20.0 )
-        Sigma_grad = getGrad(params[2], l_bound = -20.0, u_bound = 20.0 )
-        objective_grad = np.append( np.append( w_grad.reshape(1,-1), mu_grad.reshape(1,-1), axis = 1 ), Sigma_grad.reshape(1,-1) , axis = 1)
-    except:
-        objective_grad = np.zeros( num_params ).reshape(1,-1)
+    # try:
+    objective.sum().backward(retain_graph = True) 
+    w_grad = getGrad(params[0], l_bound = -20.0, u_bound = 20.0 )
+    mu_grad = getGrad(params[1], l_bound = -20.0, u_bound = 20.0 )
+    Sigma_grad = getGrad(params[2], l_bound = -20.0, u_bound = 20.0 )
+    objective_grad = np.append( np.append( w_grad.reshape(1,-1), mu_grad.reshape(1,-1), axis = 1 ), Sigma_grad.reshape(1,-1) , axis = 1)
+    # except:
+    #     objective_grad = np.zeros( num_params ).reshape(1,-1)
     
     # Get constraint improve direction # assume one at a time
     improve_constraint_direction = np.zeros( num_params ).reshape(1,-1)
@@ -172,15 +174,15 @@ polemass_length, gravity, length, masspole, total_mass, tau = torch.tensor(env.p
 
 # Initialize parameters
 N = 50
-H = 20
+H = 20#20
 np.random.seed(0)
 param_w = np.random.rand(N) - 0.5#+ 0.5#+ 2.0  #0.5 work with Lr: 5.0
 param_mu = np.random.rand(4,N) - 0.5 * np.ones((4,N)) #- 3.5 * np.ones((4,N))
 param_Sigma = generate_psd_params()
-
+initialize_tensors( env, param_w, param_mu, param_Sigma )
 # param_Sigma = np.random.rand(4,N)
 
-lr_rate = 0.4 #0.1 #0.5#0.001 #0.5
+lr_rate = 0.05 #0.4 #0.1 #0.5#0.001 #0.5
 noise = torch.tensor(0.1, dtype=torch.float)
 first_run = True
 # X = torch.rand(4).reshape(-1,1)
@@ -192,75 +194,85 @@ dt_outer = 0.06 # 0.02 # first video with 0.06
 gp_learn_loop = 20
 outer_loop = 2#4#10 #2
 
-# GP initialization
-# Estimator
-estimator_init = False
-likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=4)
-# self.train_x = np.array( [ 0, 0, 1.0, 0.0 ] ).reshape(1,-1)
+
 train_x = []#np.array( [ 0, 0, 0, 0, 0 ] ).reshape(1,-1)
 train_y = []#np.array( [ 0, 0, 0, 0 ] ).reshape(1, -1)
-gp = MultitaskGPModel(torch.tensor(train_x, dtype=torch.float), torch.tensor(train_y, dtype=torch.float), likelihood, num_tasks=4)
-gp.eval()
-likelihood.eval()
+gp = []
+likelihoods = []
+for i in range(4):
+    likelihoods.append(gpytorch.likelihoods.GaussianLikelihood())
+    gp.append(ExactGPModel(torch.tensor(train_x, dtype=torch.float), torch.tensor(train_y, dtype=torch.float), likelihoods[-1]))
+    gp[-1].eval()
+    likelihoods[-1].eval()
 
+# GP initialization
+# likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=4)
+# # self.train_x = np.array( [ 0, 0, 1.0, 0.0 ] ).reshape(1,-1)
+# train_x = []#np.array( [ 0, 0, 0, 0, 0 ] ).reshape(1,-1)
+# train_y = []#np.array( [ 0, 0, 0, 0 ] ).reshape(1, -1)
+# gp = MultitaskGPModel(torch.tensor(train_x, dtype=torch.float), torch.tensor(train_y, dtype=torch.float), likelihood, num_tasks=4)
+# gp.eval()
+# likelihood.eval()
 
-initialize_tensors( env, param_w, param_mu, param_Sigma )
-
-Xs = np.copy(env.get_state())
-Us = []
-
-cur_pose = np.copy(env.get_state())
-prev_pose = np.copy(cur_pose)
-
-for i in range(800): #300
+def simulate_scenario( gp, use_policy=False, randomize=False ):
     
-    if i==100:
-         lr_rate = lr_rate / 2
-    elif i == 200:
-         lr_rate = lr_rate / 2
-     
-    # if (i > 400): # (i % outer_loop != 0) or i<1:
-    if (i % outer_loop != 0) or (estimator_init==False):#i<1:
+    observation, info = env.reset(seed=42)
+
+    Xs = np.copy(env.get_state())
+    Us = []
+    train_x = []#np.array( [ 0, 0, 0, 0, 0 ] ).reshape(1,-1)
+    train_y = []
+
+    cur_pose = np.copy(env.get_state())
+    prev_pose = np.copy(cur_pose)
     
+    for i in range(60): #300 time steps
+                       
         # Find input
-        state = env.get_state()
-        
+        state = env.get_state()        
         state_torch = torch.tensor( state, dtype=torch.float )
-       
-        if (i<(0.5/dt_inner)) or (not estimator_init):
-            action = 5*torch.tensor(env.action_space.sample()-0.5)#   2*torch.rand(1)
+    
+        if use_policy:
+            if randomize:
+                if (np.random.rand()>0.5):
+                    action = policy( env.w_torch, env.mu_torch, env.Sigma_torch, state_torch )
+                else:
+                    # action = 5*torch.tensor(env.action_space.sample()-0.5)#   2*torch.rand(1)
+                    action = torch.tensor(10*(np.random.rand() - 0.5), dtype=torch.float)
+            else:
+                action = policy( env.w_torch, env.mu_torch, env.Sigma_torch, state_torch )
         else:
-            action = policy( env.w_torch, env.mu_torch, env.Sigma_torch, state_torch )
+            action = torch.tensor(10*(np.random.rand() - 0.5),dtype=torch.float)
+            
+        
         if (abs(action.item()))>20:
             print("ERROR*************************")
             exit()
-        print("action", action)
-        observation, reward, terminated, truncated, info = env.step(action.item())
+        # print("action", action)
         
+        observation, reward, terminated, truncated, info = env.step(action.item())        
         Xs = np.append( Xs, env.get_state(), axis = 1 )
         Us.append(action.item())
         
         env.render()
- 
-        t = t + dt_inner
+
+        # t = t + dt_inner
         
         if terminated or truncated:
             observation, info = env.reset()
             
         prev_pose = np.copy( cur_pose )
         cur_pose = np.copy(state)
-
         diff = cur_pose - prev_pose
         diff[2] = wrap_angle_numpy(diff[2])
         new_y = diff / dt_inner
-
-        # new_x = np.array([ leader_pos[0], leader_pos[1], np.cos( leader_yaw ), np.sin( leader_yaw ) ])
         new_x = np.append( cur_pose, action.detach().numpy().reshape(-1,1), axis=0 )
         # print(f"state:{new_x.T}")
         if train_x == []:
             train_x = np.copy(new_x.reshape(1,-1))
             train_y = np.copy(new_y.reshape(1,-1))
 
+        # Check if already have this state
         new_point = True
         for ij in range(np.shape(train_x)[0]):
             diff_new = np.linalg.norm(new_x.T-train_x[ij,:])
@@ -271,93 +283,121 @@ for i in range(800): #300
         if new_point:
             train_x = np.append( train_x,  new_x.reshape(1,-1), axis = 0 )
             train_y = np.append( train_y,  new_y.reshape(1,-1), axis = 0 )
-        # print(f"i:{i}, gp_learn:{gp_learn_loop}")
-        if i % gp_learn_loop == 0 and i > 0:
-            print("training")
-            estimator_init = True
-            
-            data_horizon = 3
-            dt_observer = dt_inner * gp_learn_loop
-            num_data = int( data_horizon / dt_observer )
-            print(f"dt_observer:{dt_observer}, num_data:{num_data}")
-            
-            # train_x = np.copy( train_x[-num_data:, :] ) # not good for pendulum problem
-            # train_y = np.copy( train_y[-num_data:, :] )
+        
+    # Now fit GP on Collected Data
+    
+    print("training")
+    estimator_init = True
+    
+    train_x_torch = torch.tensor(train_x, dtype=torch.float, requires_grad=True)
+    train_y_torch = torch.tensor(train_y, dtype=torch.float, requires_grad=True)
 
-            # idxs = np.random.choice(np.shape( train_x )[0], min( np.shape(train_x)[0], 20 ), replace=False) # choose from everything
-            # train_x_torch = torch.tensor(train_x[idxs, :], dtype=torch.float)
-            # train_y_torch = torch.tensor(train_y[idxs, :], dtype=torch.float)
-            train_x_torch = torch.tensor(train_x, dtype=torch.float)
-            train_y_torch = torch.tensor(train_y, dtype=torch.float)
-            # print("hello6")
-            likelihood_temp = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=4)    
-            gp_temp = MultitaskGPModel(train_x_torch, train_y_torch, likelihood_temp, num_tasks=4)
-            print("gp", gp.named_parameters())
-            for param_name, param in gp.named_parameters():
-                print(f" {param_name}, {param}")
-                gp_temp.initialize( **{ param_name:torch.clone( param ) } )
-            
-            train_gp(gp_temp,likelihood_temp, train_x_torch, train_y_torch, training_iterations = 30)
-            
-            # Copy GP back from temp to original
-            
-            gp = MultitaskGPModel(train_x_torch, train_y_torch, likelihood, num_tasks=4)
-            gp.eval()
-            likelihood.eval()
-            gp.set_train_data( train_x_torch, train_y_torch, strict = False)
-            for param_name, param in gp_temp.named_parameters():
-                gp.initialize( **{ param_name:torch.clone( param ) } )
-                
-            # Visualize training results
-            # 4 outputs
-            # print(f"train_x:{train_x_torch}")
-            # print(f"train_y:{train_y_torch}")
-            # fig, ax = plt.subplots(2,2)
-            # pred = gp(train_x_torch)
-            # mu, cov = pred.mean, pred.covariance_matrix
-            # train_x_temp = train_x_torch.detach().numpy()
-            # train_y_temp = train_y_torch.detach().numpy()
-            # mu = mu.detach().numpy()
-            # cov = np.diag(cov.detach().numpy())
-            # covar = np.zeros((np.shape(train_x_temp)[0], 4))
-            # for j in range(np.shape(train_x_temp)[0]):
-            #     covar[j,0] = cov[4*j]
-            #     covar[j,1] = cov[4*j+1]
-            #     covar[j,2] = cov[4*j+2]
-            #     covar[j,3] = cov[4*j+3]
-            # index_n = np.linspace(0,np.shape(train_x_temp)[0],np.shape(train_x_temp)[0])
-            # ax[0,0].plot( index_n, train_y_temp[:,0], 'r' )
-            # ax[0,0].plot( index_n, mu[:,0], 'g' )
-            # ax[0,0].fill_between(index_n, mu[:,0] - covar[:,0], mu[:,0] + covar[:,0], alpha=0.2, color = 'm')
-            # ax[0,1].plot( index_n, train_y_temp[:,1], 'r' )
-            # ax[0,1].plot( index_n, mu[:,1], 'g' )
-            # ax[0,1].fill_between(index_n, mu[:,1] - covar[:,1], mu[:,1] + covar[:,1], alpha=0.2, color = 'm')
-            # ax[1,0].plot( index_n, train_y_temp[:,2], 'r' )
-            # ax[1,0].plot( index_n, mu[:,2], 'g' )
-            # ax[1,0].fill_between(index_n, mu[:,2] - covar[:,2], mu[:,2] + covar[:,2], alpha=0.2, color = 'm')
-            # ax[1,1].plot( index_n, train_y_temp[:,3], 'r' )
-            # ax[1,1].plot( index_n, mu[:,3], 'g' )
-            # ax[1,1].fill_between(index_n, mu[:,3] - covar[:,3], mu[:,3] + covar[:,3], alpha=0.2, color = 'm')
-            # plt.show()
+    for i in range(4):
+        gp[i].set_train_data( train_x_torch, train_y_torch[:,i], strict = False)
+    train_gp(gp,likelihoods, train_x_torch, train_y_torch, training_iterations = 30)
+    for i in range(4):
+        gp[i].eval()
+        likelihoods[i].eval()
         
-    else:
+    # Visualize training results
+    # print(f"train_x:{train_x_torch}")
+    # print(f"train_y:{train_y_torch}")
+    fig, ax = plt.subplots(2,2)
+    pred1 = gp[0](train_x_torch)
+    pred2 = gp[1](train_x_torch)
+    pred3 = gp[2](train_x_torch)
+    pred4 = gp[3](train_x_torch)
+    mu_hat, cov = torch.cat((pred1.mean, pred2.mean, pred3.mean, pred4.mean)), torch.cat((torch.diagonal(pred1.covariance_matrix), torch.diagonal(pred2.covariance_matrix), torch.diagonal(pred3.covariance_matrix), torch.diagonal(pred4.covariance_matrix)))
+    train_x_temp = train_x_torch.detach().numpy()
+    train_y_temp = train_y_torch.detach().numpy()
+    # mu = mu.detach().numpy()
+    # cov = np.diag(cov.detach().numpy())
+    covar = np.zeros((np.shape(train_x_temp)[0], 4))
+    mu = np.zeros((np.shape(train_x_temp)[0], 4))
+    for j in range(np.shape(train_x_temp)[0]):
+        covar[j,0] = cov[np.shape(train_x_temp)[0]*0 + j]
+        covar[j,1] = cov[np.shape(train_x_temp)[0]*1 + j]
+        covar[j,2] = cov[np.shape(train_x_temp)[0]*2 + j]
+        covar[j,3] = cov[np.shape(train_x_temp)[0]*3 + j]
+        mu[j,0] = mu_hat[np.shape(train_x_temp)[0]*0 + j]
+        mu[j,1] = mu_hat[np.shape(train_x_temp)[0]*1 + j]
+        mu[j,2] = mu_hat[np.shape(train_x_temp)[0]*2 + j]
+        mu[j,3] = mu_hat[np.shape(train_x_temp)[0]*3 + j]
+    index_n = np.linspace(0,np.shape(train_x_temp)[0],np.shape(train_x_temp)[0])
+    ax[0,0].plot( index_n, train_y_temp[:,0], 'r' )
+    ax[0,0].plot( index_n, mu[:,0], 'g' )
+    ax[0,0].fill_between(index_n, mu[:,0] - 2*np.sqrt(covar[:,0]), mu[:,0] + 2*np.sqrt(covar[:,0]), alpha=0.2, color = 'm')
+    ax[0,1].plot( index_n, train_y_temp[:,1], 'r' )
+    ax[0,1].plot( index_n, mu[:,1], 'g' )
+    ax[0,1].fill_between(index_n, mu[:,1] - 2*np.sqrt(covar[:,1]), mu[:,1] + 2*np.sqrt(covar[:,1]), alpha=0.2, color = 'm')
+    ax[1,0].plot( index_n, train_y_temp[:,2], 'r' )
+    ax[1,0].plot( index_n, mu[:,2], 'g' )
+    ax[1,0].fill_between(index_n, mu[:,2] - 2*np.sqrt(covar[:,2]), mu[:,2] + 2*np.sqrt(covar[:,2]), alpha=0.2, color = 'm')
+    ax[1,1].plot( index_n, train_y_temp[:,3], 'r' )
+    ax[1,1].plot( index_n, mu[:,3], 'g' )
+    ax[1,1].fill_between(index_n, mu[:,3] - 2*np.sqrt(covar[:,3]), mu[:,3] + 2*np.sqrt(covar[:,3]), alpha=0.2, color = 'm')
+    plt.show()
+    
+    return gp
+
+    
+    
+    
+def optimize_policy(env, gp, params, initialize_new_policy=False, lr_rate = 0.4):
+    
+    param_w = params[0]
+    param_mu = params[1]
+    param_Sigma = params[2]
+    
+    if initialize_new_policy:
+        np.random.seed(0)
+        param_w = np.random.rand(N) - 0.5#+ 0.5#+ 2.0  #0.5 work with Lr: 5.0
+        param_mu = np.random.rand(4,N) - 0.5 * np.ones((4,N)) #- 3.5 * np.ones((4,N))
+        param_Sigma = generate_psd_params()
+        initialize_tensors( env, param_w, param_mu, param_Sigma )     
+       
+    # Find input
+    state = env.get_state()
+    
+    state_torch = torch.tensor( state, dtype=torch.float )        
+    initialize_tensors( env, param_w, param_mu, param_Sigma )
+
+    # env state does not change. always start from the same state
+    success = False
+    iter = 0
+    while not success and iter < 50:
         
+        if iter==100:
+            lr_rate = lr_rate / 2
+        elif iter == 200:
+            lr_rate = lr_rate / 2
+        
+        maintain_constraints, improve_constraints, success, reward = get_future_reward( env, gp, [env.w_torch, env.mu_torch, env.Sigma_torch] )
+        success = success and (reward[-1]<-90)
+        print(f"Iteration number: {iter}, Terminal reward: {reward[-1]}")
+        grads = constrained_update( reward, maintain_constraints, improve_constraints, [env.w_torch, env.mu_torch, env.Sigma_torch] )
+        
+        grads = np.clip( grads, -2.0, 2.0 )
+        # print(grads)
+        param_w = np.clip(param_w + lr_rate * grads[0:param_w.size][:,0], -10, 10 )
+        param_mu = np.clip(param_mu + lr_rate * grads[param_w.size:param_w.size + param_mu.size].reshape( 4, 50 ), -10, 10 )
+        param_Sigma = np.clip(param_Sigma + lr_rate * grads[param_w.size + param_mu.size:].reshape( 50, 10 ), -1.0, 1.0 )
         initialize_tensors( env, param_w, param_mu, param_Sigma )
+        # print(f"params w:{param_w}, mu:{param_w}, Sigma:{param_Sigma}"
+        
+        iter = iter + 1
+    print("Successfully made it feasible")  
+        
+    return env, [param_w, param_mu, param_Sigma]
 
-        success = False
-        while not success:
-            print()
-            maintain_constraints, improve_constraints, success, reward = get_future_reward( env, gp, [env.w_torch, env.mu_torch, env.Sigma_torch] ) 
-            grads = constrained_update( reward, maintain_constraints, improve_constraints, [env.w_torch, env.mu_torch, env.Sigma_torch] )
-            
-            grads = np.clip( grads, -2.0, 2.0 )
-            param_w = np.clip(param_w + lr_rate * grads[0:param_w.size][:,0], -10, 10 )
-            param_mu = np.clip(param_mu + lr_rate * grads[param_w.size:param_w.size + param_mu.size].reshape( 4, 50 ), -10, 10 )
-            param_Sigma = np.clip(param_Sigma + lr_rate * grads[param_w.size + param_mu.size:].reshape( 50, 10 ), -1.0, 1.0 )
-            # print(f"params w:{param_w}, mu:{param_w}, Sigma:{param_Sigma}")
+params = [param_w, param_mu, param_Sigma]
 
-            initialize_tensors(env, param_w, param_mu, param_Sigma)
-        print("Successfully made it feasible")  
+gp = simulate_scenario(gp, use_policy=False, randomize=False)
+env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
+
+gp = simulate_scenario(gp, use_policy=True, randomize=False)
+# params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
+# initialize_tensors( env, param_w, param_mu, param_Sigma )
 
 tp1 = np.linspace( 0, dt_inner * Xs.shape[1], Xs.shape[1]  )
 figure1, axis1 = plt.subplots( 1 , 1)
