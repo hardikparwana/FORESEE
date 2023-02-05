@@ -365,11 +365,11 @@ def optimize_policy(env, gp, params, initialize_new_policy=False, lr_rate = 0.4)
     # env state does not change. always start from the same state
     success = False
     iter = 0
-    while not success and iter < 50:
+    while not success and iter < 10:
         
-        if iter==100:
+        if iter==4:
             lr_rate = lr_rate / 2
-        elif iter == 200:
+        elif iter == 8:
             lr_rate = lr_rate / 2
         
         maintain_constraints, improve_constraints, success, reward = get_future_reward( env, gp, [env.w_torch, env.mu_torch, env.Sigma_torch] )
