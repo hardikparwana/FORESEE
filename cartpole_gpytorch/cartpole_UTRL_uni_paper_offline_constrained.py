@@ -214,14 +214,14 @@ for i in range(4):
 # gp.eval()
 # likelihood.eval()
 
-def simulate_scenario( gp, use_policy=False, randomize=False, run_name = "gp_fit.png" ):
+def simulate_scenario( gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit.png" ):
     
     observation, info = env.reset(seed=42)
 
     Xs = np.copy(env.get_state())
     Us = []
-    train_x = []#np.array( [ 0, 0, 0, 0, 0 ] ).reshape(1,-1)
-    train_y = []
+    # train_x = []#np.array( [ 0, 0, 0, 0, 0 ] ).reshape(1,-1)
+    # train_y = []
 
     cur_pose = np.copy(env.get_state())
     prev_pose = np.copy(cur_pose)
@@ -339,7 +339,7 @@ def simulate_scenario( gp, use_policy=False, randomize=False, run_name = "gp_fit
     # plt.show()
     fig.savefig(run_name)
     
-    return gp
+    return gp, train_x, train_y
 
     
     
@@ -392,24 +392,25 @@ def optimize_policy(env, gp, params, initialize_new_policy=False, lr_rate = 0.4)
     return env, [param_w, param_mu, param_Sigma]
 
 params = [param_w, param_mu, param_Sigma]
-
-gp = simulate_scenario(gp, use_policy=False, randomize=False, run_name = "gp_fit0.png")
+train_x = []
+train_y = []
+gp = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit0.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp = simulate_scenario(gp, use_policy=True, randomize=False, run_name = "gp_fit1.png")
+gp = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit1.png")
 # params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 # initialize_tensors( env, param_w, param_mu, param_Sigma )
 
-tp1 = np.linspace( 0, dt_inner * Xs.shape[1], Xs.shape[1]  )
-figure1, axis1 = plt.subplots( 1 , 1)
-axis1.plot( tp1, Xs[0,:], 'k', label='Cart Position' )
-axis1.plot( tp1, Xs[1,:], 'r', label='Cart Velocity' )
-axis1.plot( tp1, Xs[2,:], 'g', label='Pole angle' )
-axis1.plot( tp1, Xs[3,:], 'c', label='Pole  velocity' )
+# tp1 = np.linspace( 0, dt_inner * Xs.shape[1], Xs.shape[1]  )
+# figure1, axis1 = plt.subplots( 1 , 1)
+# axis1.plot( tp1, Xs[0,:], 'k', label='Cart Position' )
+# axis1.plot( tp1, Xs[1,:], 'r', label='Cart Velocity' )
+# axis1.plot( tp1, Xs[2,:], 'g', label='Pole angle' )
+# axis1.plot( tp1, Xs[3,:], 'c', label='Pole  velocity' )
 
-if True:
-    figure1.savefig("cartpole_states.eps")
-    figure1.savefig("cartpole_states.png")
+# if True:
+#     figure1.savefig("cartpole_states.eps")
+#     figure1.savefig("cartpole_states.png")
 
         
 # env.close_video_recorder()
