@@ -174,7 +174,7 @@ polemass_length, gravity, length, masspole, total_mass, tau = torch.tensor(env.p
 
 # Initialize parameters
 N = 50
-H = 20#20
+H = 100#20
 np.random.seed(0)
 param_w = np.random.rand(N) - 0.5#+ 0.5#+ 2.0  #0.5 work with Lr: 5.0
 param_mu = np.random.rand(4,N) - 0.5 * np.ones((4,N)) #- 3.5 * np.ones((4,N))
@@ -397,7 +397,19 @@ train_y = []
 gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit0.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit1.png")
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit1.png")
+env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
+
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit2.png")
+env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
+
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit3.png")
+env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
+
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit4.png")
+env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
+
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit5.png")
 # params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 # initialize_tensors( env, param_w, param_mu, param_Sigma )
 
