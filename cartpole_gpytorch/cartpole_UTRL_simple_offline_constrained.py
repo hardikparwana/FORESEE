@@ -30,7 +30,7 @@ def initialize_tensors(robot, param_w, param_mu, param_Sigma):
     robot.Sigma_torch = torch.tensor( param_Sigma, requires_grad = True, dtype=torch.float )
 
 x_lim = 1.5
-def get_future_reward(robot, gp):
+def get_future_reward(robot, gp, params):
            
     prior_states, prior_weights = initialize_sigma_points_JIT(robot.X_torch)
     states = [prior_states]
@@ -48,12 +48,18 @@ def get_future_reward(robot, gp):
         if np.abs(mean_position[0].detach().numpy()) > 1.5:
             improve_constraints.append( torch.square( mean_position[0] ) )
             print(f"Become Infeasible at :{i}. Need to improve feasibility first")
+            if i==0:
+                print("Initial state violates the constraint. Can't do anything!")
+                exit()
             return maintain_constraints, improve_constraints, False, reward
         elif torch.square( mean_position[0] ) > x_lim**2 * 5.0 / 6.0:
             maintain_constraints.append( x_lim**2 - torch.square( mean_position[0] ) )
         
         # Get control input      
         solution = traced_policy( robot.w_torch, robot.mu_torch, robot.Sigma_torch, mean_position )
+        getGrad(params[0], l_bound = -20.0, u_bound = 20.0 )
+        getGrad(params[1], l_bound = -20.0, u_bound = 20.0 )
+        getGrad(params[2], l_bound = -20.0, u_bound = 20.0 )
    
         # Get expanded next state
         next_states_expanded, next_weights_expanded = sigma_point_expand_JIT( states[i], weights[i], solution, dt_outer, gp)#, gps )        
@@ -183,7 +189,7 @@ first_run = True
 t = 0
 dt_inner = 0.02
 dt_outer = 0.06 # 0.02 # first video with 0.06
-gp_learn_loop = 20
+gp_learn_loop = 30#20
 outer_loop = 2#4#10 #2
 
 # GP initialization
@@ -191,8 +197,8 @@ outer_loop = 2#4#10 #2
 estimator_init = False
 likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=4)
 # self.train_x = np.array( [ 0, 0, 1.0, 0.0 ] ).reshape(1,-1)
-train_x = np.array( [ 0, 0, 0, 0, 0 ] ).reshape(1,-1)
-train_y = np.array( [ 0, 0, 0, 0 ] ).reshape(1, -1)
+train_x = []#np.array( [ 0, 0, 0, 0, 0 ] ).reshape(1,-1)
+train_y = []#np.array( [ 0, 0, 0, 0 ] ).reshape(1, -1)
 gp = MultitaskGPModel(torch.tensor(train_x, dtype=torch.float), torch.tensor(train_y, dtype=torch.float), likelihood, num_tasks=4)
 gp.eval()
 likelihood.eval()
@@ -218,12 +224,16 @@ for i in range(800): #300
     
         # Find input
         state = env.get_state()
+        
         state_torch = torch.tensor( state, dtype=torch.float )
        
-        action = policy( env.w_torch, env.mu_torch, env.Sigma_torch, state_torch )
+        if (i<(0.5/dt_inner)) or (not estimator_init):
+            action = 10*torch.tensor(env.action_space.sample()-0.5)#   2*torch.rand(1)
+        else:
+            action = policy( env.w_torch, env.mu_torch, env.Sigma_torch, state_torch )
         if (abs(action.item()))>20:
             print("ERROR*************************")
-            # exit()
+            exit()
         print("action", action)
         observation, reward, terminated, truncated, info = env.step(action.item())
         
@@ -241,14 +251,27 @@ for i in range(800): #300
         cur_pose = np.copy(state)
 
         diff = cur_pose - prev_pose
+        diff[2] = wrap_angle_numpy(diff[2])
         new_y = diff / dt_inner
 
         # new_x = np.array([ leader_pos[0], leader_pos[1], np.cos( leader_yaw ), np.sin( leader_yaw ) ])
         new_x = np.append( cur_pose, action.detach().numpy().reshape(-1,1), axis=0 )
+        # print(f"state:{new_x.T}")
+        if train_x == []:
+            train_x = np.copy(new_x.reshape(1,-1))
+            train_y = np.copy(new_y.reshape(1,-1))
 
-        train_x = np.append( train_x,  new_x.reshape(1,-1), axis = 0 )
-        train_y = np.append( train_y,  new_y.reshape(1,-1), axis = 0 )
-        
+        new_point = True
+        for ij in range(np.shape(train_x)[0]):
+            diff_new = np.linalg.norm(new_x.T-train_x[ij,:])
+            # print(f"diff: {diff_new}")
+            if diff_new<0.7: # if data very similar, do not add
+                new_point = False
+                break
+        if new_point:
+            train_x = np.append( train_x,  new_x.reshape(1,-1), axis = 0 )
+            train_y = np.append( train_y,  new_y.reshape(1,-1), axis = 0 )
+        # print(f"i:{i}, gp_learn:{gp_learn_loop}")
         if i % gp_learn_loop == 0 and i > 0:
             print("training")
             estimator_init = True
@@ -258,25 +281,64 @@ for i in range(800): #300
             num_data = int( data_horizon / dt_observer )
             print(f"dt_observer:{dt_observer}, num_data:{num_data}")
             
-            train_x = np.copy( train_x[-num_data:, :] )
-            train_y = np.copy( train_y[-num_data:, :] )
+            # train_x = np.copy( train_x[-num_data:, :] ) # not good for pendulum problem
+            # train_y = np.copy( train_y[-num_data:, :] )
 
-            idxs = np.random.choice(np.shape( train_x )[0], min( np.shape(train_x)[0], 40 ), replace=False)
-            
-            train_x_torch = torch.tensor(train_x[idxs, :], dtype=torch.float)
-            train_y_torch = torch.tensor(train_y[idxs, :], dtype=torch.float)
+            # idxs = np.random.choice(np.shape( train_x )[0], min( np.shape(train_x)[0], 20 ), replace=False) # choose from everything
+            # train_x_torch = torch.tensor(train_x[idxs, :], dtype=torch.float)
+            # train_y_torch = torch.tensor(train_y[idxs, :], dtype=torch.float)
+            train_x_torch = torch.tensor(train_x, dtype=torch.float)
+            train_y_torch = torch.tensor(train_y, dtype=torch.float)
             # print("hello6")
             likelihood_temp = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=4)    
             gp_temp = MultitaskGPModel(train_x_torch, train_y_torch, likelihood_temp, num_tasks=4)
+            print("gp", gp.named_parameters())
             for param_name, param in gp.named_parameters():
+                print(f" {param_name}, {param}")
                 gp_temp.initialize( **{ param_name:torch.clone( param ) } )
             
-            train_gp(gp_temp,likelihood_temp, train_x_torch, train_y_torch, training_iterations = 10)
+            train_gp(gp_temp,likelihood_temp, train_x_torch, train_y_torch, training_iterations = 30)
             
             # Copy GP back from temp to original
+            
+            gp = MultitaskGPModel(train_x_torch, train_y_torch, likelihood, num_tasks=4)
+            gp.eval()
+            likelihood.eval()
             gp.set_train_data( train_x_torch, train_y_torch, strict = False)
             for param_name, param in gp_temp.named_parameters():
                 gp.initialize( **{ param_name:torch.clone( param ) } )
+                
+            # Visualize training results
+            # 4 outputs
+            # print(f"train_x:{train_x_torch}")
+            # print(f"train_y:{train_y_torch}")
+            # fig, ax = plt.subplots(2,2)
+            # pred = gp(train_x_torch)
+            # mu, cov = pred.mean, pred.covariance_matrix
+            # train_x_temp = train_x_torch.detach().numpy()
+            # train_y_temp = train_y_torch.detach().numpy()
+            # mu = mu.detach().numpy()
+            # cov = np.diag(cov.detach().numpy())
+            # covar = np.zeros((np.shape(train_x_temp)[0], 4))
+            # for j in range(np.shape(train_x_temp)[0]):
+            #     covar[j,0] = cov[4*j]
+            #     covar[j,1] = cov[4*j+1]
+            #     covar[j,2] = cov[4*j+2]
+            #     covar[j,3] = cov[4*j+3]
+            # index_n = np.linspace(0,np.shape(train_x_temp)[0],np.shape(train_x_temp)[0])
+            # ax[0,0].plot( index_n, train_y_temp[:,0], 'r' )
+            # ax[0,0].plot( index_n, mu[:,0], 'g' )
+            # ax[0,0].fill_between(index_n, mu[:,0] - covar[:,0], mu[:,0] + covar[:,0], alpha=0.2, color = 'm')
+            # ax[0,1].plot( index_n, train_y_temp[:,1], 'r' )
+            # ax[0,1].plot( index_n, mu[:,1], 'g' )
+            # ax[0,1].fill_between(index_n, mu[:,1] - covar[:,1], mu[:,1] + covar[:,1], alpha=0.2, color = 'm')
+            # ax[1,0].plot( index_n, train_y_temp[:,2], 'r' )
+            # ax[1,0].plot( index_n, mu[:,2], 'g' )
+            # ax[1,0].fill_between(index_n, mu[:,2] - covar[:,2], mu[:,2] + covar[:,2], alpha=0.2, color = 'm')
+            # ax[1,1].plot( index_n, train_y_temp[:,3], 'r' )
+            # ax[1,1].plot( index_n, mu[:,3], 'g' )
+            # ax[1,1].fill_between(index_n, mu[:,3] - covar[:,3], mu[:,3] + covar[:,3], alpha=0.2, color = 'm')
+            # plt.show()
         
     else:
         
@@ -284,7 +346,8 @@ for i in range(800): #300
 
         success = False
         while not success:
-            maintain_constraints, improve_constraints, success, reward = get_future_reward( env, gp ) 
+            print()
+            maintain_constraints, improve_constraints, success, reward = get_future_reward( env, gp, [env.w_torch, env.mu_torch, env.Sigma_torch] ) 
             grads = constrained_update( reward, maintain_constraints, improve_constraints, [env.w_torch, env.mu_torch, env.Sigma_torch] )
             
             grads = np.clip( grads, -2.0, 2.0 )
