@@ -214,7 +214,7 @@ for i in range(4):
 # gp.eval()
 # likelihood.eval()
 
-def simulate_scenario( gp, use_policy=False, randomize=False ):
+def simulate_scenario( gp, use_policy=False, randomize=False, run_name = "gp_fit.png" ):
     
     observation, info = env.reset(seed=42)
 
@@ -336,7 +336,8 @@ def simulate_scenario( gp, use_policy=False, randomize=False ):
     ax[1,1].plot( index_n, train_y_temp[:,3], 'r' )
     ax[1,1].plot( index_n, mu[:,3], 'g' )
     ax[1,1].fill_between(index_n, mu[:,3] - 2*np.sqrt(covar[:,3]), mu[:,3] + 2*np.sqrt(covar[:,3]), alpha=0.2, color = 'm')
-    plt.show()
+    # plt.show()
+    fig.savefig(run_name)
     
     return gp
 
@@ -392,10 +393,10 @@ def optimize_policy(env, gp, params, initialize_new_policy=False, lr_rate = 0.4)
 
 params = [param_w, param_mu, param_Sigma]
 
-gp = simulate_scenario(gp, use_policy=False, randomize=False)
+gp = simulate_scenario(gp, use_policy=False, randomize=False, run_name = "gp_fit0.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp = simulate_scenario(gp, use_policy=True, randomize=False)
+gp = simulate_scenario(gp, use_policy=True, randomize=False, run_name = "gp_fit1.png")
 # params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 # initialize_tensors( env, param_w, param_mu, param_Sigma )
 
