@@ -394,10 +394,10 @@ def optimize_policy(env, gp, params, initialize_new_policy=False, lr_rate = 0.4)
 params = [param_w, param_mu, param_Sigma]
 train_x = []
 train_y = []
-gp = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit0.png")
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit0.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit1.png")
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit1.png")
 # params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 # initialize_tensors( env, param_w, param_mu, param_Sigma )
 
