@@ -19,3 +19,4 @@ cartpole/gym_wrappers/monitoring/__pycache__/
 cartpole_gpytorch/cp_utils/__pycache__/*
 cartpole_gpytorch/gym_wrappers/__pycache__/__init__.cpython-38.pyc cartpole_gpytorch/gym_wrappers/__pycache__/record_video.cpython-38.pyc
 cartpole_gpytorch/gym_wrappers/monitoring/__pycache__/__init__.cpython-38.pyc cartpole_gpytorch/gym_wrappers/monitoring/__pycache__/video_recorder.cpython-38.pyc
+cartpole_gpytorch/__pycache__/cartpole_policy.cpython-38.pyc
