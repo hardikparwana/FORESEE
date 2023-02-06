@@ -45,7 +45,7 @@ def get_future_reward(robot, gp, params):
         # print("hello")
         # Get mean position
         mean_position = traced_get_mean_JIT( states[i], weights[i] )
-        # print("h1")
+        print("h1")
         if np.abs(mean_position[0].detach().numpy()) > 1.5:
             improve_constraints.append( torch.square( mean_position[0] ) )
             print(f"Become Infeasible at :{i}. Need to improve feasibility first")
@@ -61,10 +61,10 @@ def get_future_reward(robot, gp, params):
         # getGrad(params[0], l_bound = -20.0, u_bound = 20.0 )
         # getGrad(params[1], l_bound = -20.0, u_bound = 20.0 )
         # getGrad(params[2], l_bound = -20.0, u_bound = 20.0 )
-        # print("h2")
+        print("h2")
         # Get expanded next state
         next_states_expanded, next_weights_expanded = sigma_point_expand_JIT( states[i], weights[i], solution, dt_outer, gp)#, gps )        
-        # print("h3")
+        print("h3")
         # Compress back now
         next_states, next_weights = traced_sigma_point_compress_JIT( next_states_expanded, next_weights_expanded )
         # print("h4")

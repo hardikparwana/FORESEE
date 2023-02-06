@@ -136,7 +136,7 @@ def sigma_point_expand_JIT(sigma_points, weights, control, dt_outer, gp):#, gps)
     for i in range(1,N):
         
         input_x = torch.cat( (sigma_points[:,i].reshape(-1,1),control.reshape(-1,1)), axis=0 ).reshape(1,-1)
-        input_x.sum().backward(retain_graph=True)
+        # input_x.sum().backward(retain_graph=True)
         # print("Input 2 OK")
         
         
