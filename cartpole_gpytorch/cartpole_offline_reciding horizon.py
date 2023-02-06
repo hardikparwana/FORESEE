@@ -45,14 +45,15 @@ def get_future_reward(robot, gp, params):
         # print("hello")
         # Get mean position
         mean_position = traced_get_mean_JIT( states[i], weights[i] )
-        print("h1")
+        # print("h1")
         if np.abs(mean_position[0].detach().numpy()) > 1.5:
             improve_constraints.append( torch.square( mean_position[0] ) )
             print(f"Become Infeasible at :{i}. Need to improve feasibility first")
             if i==0:
                 print("Initial state violates the constraint. Can't do anything!")
-                exit()
-            return maintain_constraints, improve_constraints, False, reward
+                return maintain_constraints, improve_constraints, True, reward, True
+                # exit()
+            return maintain_constraints, improve_constraints, False, reward, False
         elif torch.square( mean_position[0] ) > x_lim**2 * 5.0 / 6.0:
             maintain_constraints.append( x_lim**2 - torch.square( mean_position[0] ) )
         
@@ -61,10 +62,10 @@ def get_future_reward(robot, gp, params):
         # getGrad(params[0], l_bound = -20.0, u_bound = 20.0 )
         # getGrad(params[1], l_bound = -20.0, u_bound = 20.0 )
         # getGrad(params[2], l_bound = -20.0, u_bound = 20.0 )
-        print("h2")
+        # print("h2")
         # Get expanded next state
-        next_states_expanded, next_weights_expanded = sigma_point_expand_JIT( states[i], weights[i], solution, dt_outer, gp)#, gps )        
-        print("h3")
+        next_states_expanded, next_weights_expanded = sigma_point_expand_JIT( states[i], weights[i], solution, torch.tensor(dt_outer, dtype=torch.float), gp)#, gps )        
+        # print("h3")
         # Compress back now
         next_states, next_weights = traced_sigma_point_compress_JIT( next_states_expanded, next_weights_expanded )
         # print("h4")
@@ -76,9 +77,9 @@ def get_future_reward(robot, gp, params):
         # print("reward", reward[-1])
         # print("h6")
         
-    return maintain_constraints, improve_constraints, True, reward
+    return maintain_constraints, improve_constraints, True, reward, False
         
-    return reward
+    # return reward
 
 
 def constrained_update( objective, maintain_constraints, improve_constraints, params ) :
@@ -173,10 +174,19 @@ observation, info = env.reset(seed=42)
 
 polemass_length, gravity, length, masspole, total_mass, tau = torch.tensor(env.polemass_length), torch.tensor(env.gravity), torch.tensor(env.length), torch.tensor(env.masspole), torch.tensor(env.total_mass), torch.tensor(env.tau)
 
+# Initialize sim parameters
+t = 0
+dt_inner = 0.02
+dt_outer = 0.06 # 0.02 # first video with 0.06
+gp_learn_loop = 20
+outer_loop = 4#4#10 #2
+
 # Initialize parameters
+H_learning_gp = 60
+H_policy_run_time = H_learning_gp * outer_loop
 N = 50
-H = 20
-H_learning_gp = 10#60
+H = 30#20 # prediction horizon
+
 np.random.seed(0)
 param_w = np.random.rand(N) - 0.5#+ 0.5#+ 2.0  #0.5 work with Lr: 5.0
 param_mu = np.random.rand(4,N) - 0.5 * np.ones((4,N)) #- 3.5 * np.ones((4,N))
@@ -189,12 +199,7 @@ noise = torch.tensor(0.1, dtype=torch.float)
 first_run = True
 # X = torch.rand(4).reshape(-1,1)
 
-# Initialize sim parameters
-t = 0
-dt_inner = 0.02
-dt_outer = 0.06 # 0.02 # first video with 0.06
-gp_learn_loop = 20
-outer_loop = 2#4#10 #2
+
 
 
 train_x = []#np.array( [ 0, 0, 0, 0, 0 ] ).reshape(1,-1)
@@ -368,15 +373,15 @@ def optimize_policy(env, gp, params, initialize_new_policy=False, lr_rate = 0.4)
     initialize_tensors( env, param_w, param_mu, param_Sigma )
     
     t = 0
-    for i in range(800):
-        print("hello")
+    for i in range( H_policy_run_time ):
+        # print("hello")
         if i==100:
             lr_rate = lr_rate / 2
         elif i == 200:
             lr_rate = lr_rate / 2
         
         if (i % outer_loop != 0) or i<1:
-            print(f"i:{i}")
+            # print(f"i:{i}")
             # move state forward
             state_torch = torch.tensor( state, dtype=torch.float )
             action = policy( env.w_torch, env.mu_torch, env.Sigma_torch, state_torch )
@@ -396,8 +401,13 @@ def optimize_policy(env, gp, params, initialize_new_policy=False, lr_rate = 0.4)
             initialize_tensors( env, param_w, param_mu, param_Sigma )
 
             success = False
+            repeat_iter = 0
             while not success:
-                maintain_constraints, improve_constraints, success, reward = get_future_reward( env, gp, [env.w_torch, env.mu_torch, env.Sigma_torch] ) 
+                if repeat_iter > 10:
+                    break
+                maintain_constraints, improve_constraints, success, reward, done = get_future_reward( env, gp, [env.w_torch, env.mu_torch, env.Sigma_torch] ) 
+                if done:
+                    break
                 grads = constrained_update( reward, maintain_constraints, improve_constraints, [env.w_torch, env.mu_torch, env.Sigma_torch] )
                 
                 grads = np.clip( grads, -2.0, 2.0 )
@@ -407,8 +417,10 @@ def optimize_policy(env, gp, params, initialize_new_policy=False, lr_rate = 0.4)
                 # print(f"params w:{param_w}, mu:{param_w}, Sigma:{param_Sigma}")
 
                 initialize_tensors(env, param_w, param_mu, param_Sigma)
-                
-            print("Successfully made it feasible!") 
+                repeat_iter += 1
+
+
+            print(f" i:{i} Successfully made it feasible!") 
             
     return env, [param_w, param_mu, param_Sigma]
 
@@ -418,16 +430,20 @@ train_y = []
 gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit0.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit1.png")
+# env_to_render = CustomCartPoleEnv(render_mode="human")#rgb_array
+# env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/", name_prefix="cartpole_constrained_H20" )
+# observation, info = env.reset(seed=42)
+# initialize_tensors( env, param_w, param_mu, param_Sigma )
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit1.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit2.png")
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit2.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit3.png")
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit3.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit4.png")
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit4.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
 gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit5.png")

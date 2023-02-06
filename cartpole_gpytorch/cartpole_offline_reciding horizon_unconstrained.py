@@ -15,7 +15,8 @@ from cp_utils.gp_uni_utils import *
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel
 
-from robot_models.custom_cartpole_constrained import CustomCartPoleEnv
+# from robot_models.custom_cartpole_constrained import CustomCartPoleEnv
+from robot_models.custom_cartpole4 import CustomCartPoleEnv
 from gym_wrappers.record_video import RecordVideo
 from cartpole_policy import policy, traced_policy
 
@@ -38,112 +39,35 @@ def get_future_reward(robot, gp, params):
     weights = [prior_weights]
     reward = torch.tensor([0],dtype=torch.float)
     
-    maintain_constraints = []
-    improve_constraints = []    
-    
     for i in range(H):  
         # print("hello")
         # Get mean position
         mean_position = traced_get_mean_JIT( states[i], weights[i] )
-        
-        if np.abs(mean_position[0].detach().numpy()) > 1.5:
-            improve_constraints.append( torch.square( mean_position[0] ) )
-            print(f"Become Infeasible at :{i}. Need to improve feasibility first")
-            if i==0:
-                print("Initial state violates the constraint. Can't do anything!")
-                exit()
-            return maintain_constraints, improve_constraints, False, reward
-        elif torch.square( mean_position[0] ) > x_lim**2 * 5.0 / 6.0:
-            maintain_constraints.append( x_lim**2 - torch.square( mean_position[0] ) )
+        # print("h1")
         
         # Get control input      
         solution = traced_policy( robot.w_torch, robot.mu_torch, robot.Sigma_torch, mean_position )
         # getGrad(params[0], l_bound = -20.0, u_bound = 20.0 )
         # getGrad(params[1], l_bound = -20.0, u_bound = 20.0 )
         # getGrad(params[2], l_bound = -20.0, u_bound = 20.0 )
-   
+        # print("h2")
         # Get expanded next state
         next_states_expanded, next_weights_expanded = sigma_point_expand_JIT( states[i], weights[i], solution, torch.tensor(dt_outer, dtype=torch.float), gp)#, gps )        
-        
+        # print("h3")
         # Compress back now
         next_states, next_weights = traced_sigma_point_compress_JIT( next_states_expanded, next_weights_expanded )
-        
+        # print("h4")
         # Store states and weights
         states.append( next_states ); weights.append( next_weights )
-            
+        # print("h5")
         # Get reward 
         reward = reward + traced_reward_UT_Mean_Evaluator_basic( states[i+1], weights[i+1] )
         # print("reward", reward[-1])
-        
-    return maintain_constraints, improve_constraints, True, reward
+        # print("h6")
         
     return reward
-
-
-def constrained_update( objective, maintain_constraints, improve_constraints, params ) :
-    
-    num_params = params[0].detach().numpy().size + params[1].detach().numpy().size + params[2].detach().numpy().size
-    d = cp.Variable((num_params,1))
-    
-    # Get Performance optimal direction
-    # try:
-    objective.sum().backward(retain_graph = True) 
-    w_grad = getGrad(params[0], l_bound = -20.0, u_bound = 20.0 )
-    mu_grad = getGrad(params[1], l_bound = -20.0, u_bound = 20.0 )
-    Sigma_grad = getGrad(params[2], l_bound = -20.0, u_bound = 20.0 )
-    objective_grad = np.append( np.append( w_grad.reshape(1,-1), mu_grad.reshape(1,-1), axis = 1 ), Sigma_grad.reshape(1,-1) , axis = 1)
-    # except:
-    #     objective_grad = np.zeros( num_params ).reshape(1,-1)
-    
-    # Get constraint improve direction # assume one at a time
-    improve_constraint_direction = np.zeros( num_params ).reshape(1,-1)
-    for i, constraint in enumerate( improve_constraints):
-        constraint.sum().backward(retain_graph=True)
-        w_grad = getGrad(params[0], l_bound = -20.0, u_bound = 20.0 )
-        mu_grad = getGrad(params[1], l_bound = -20.0, u_bound = 20.0 )
-        Sigma_grad = getGrad(params[2], l_bound = -20.0, u_bound = 20.0 )
-        improve_constraint_direction = improve_constraint_direction + np.append( np.append( w_grad.reshape(1,-1), mu_grad.reshape(1,-1), axis = 1 ), Sigma_grad.reshape(1,-1) , axis = 1)
-    
-    # Get allowed directions
-    N = len(maintain_constraints)
-    if N>0:
-        d_maintain = np.zeros((N,num_params))#cp.Variable( (N, num_params) )
-        constraints = []
-        for i, constraint in enumerate(maintain_constraints):
-            constraint.sum().backward(retain_graph=True)
-            w_grad = getGrad(params[0], l_bound = -20.0, u_bound = 20.0 )
-            mu_grad = getGrad(params[1], l_bound = -20.0, u_bound = 20.0 )
-            Sigma_grad = getGrad(params[2], l_bound = -20.0, u_bound = 20.0 )
-            d_maintain[i,:] = np.append( np.append( w_grad.reshape(1,-1), mu_grad.reshape(1,-1), axis = 1 ), Sigma_grad.reshape(1,-1) , axis = 1)[0]
-            
-            if constraints ==[]: 
-                constraints = constraint.detach().numpy().reshape(-1,1)
-            else:
-                constraints = np.append( constraints, constraint.detach().numpy().reshape(-1,1), axis = 0 )       
-
-        const = [ constraints + d_maintain @ d >= 0 ]
-        const += [ cp.sum_squares( d ) <= 200 ]
-        if len(improve_constraint_direction)>0:
-            obj = cp.Minimize( improve_constraint_direction @ d )
-        else:
-            obj = cp.Minimize(  objective_grad @ d  )
-        problem = cp.Problem( obj, const )    
-        problem.solve( solver = cp.GUROBI )    
-        if problem.status != 'optimal':
-            print("Cannot Find feasible direction")
-            exit()
         
-        # print("update direction: ", d.value.T)
-        
-        return d.value
-    
-    else:
-        if len( improve_constraints ) > 0:
-            obj = cp.Maximize( improve_constraint_direction @ d )
-            # print("update direction: ", -improve_constraint_direction.reshape(-1,1).T)
-            return -improve_constraint_direction.reshape(-1,1)
-        else:
-            return -objective_grad.reshape(-1,1)
+    # return reward
 
 def generate_psd_params():
     n = 4
@@ -156,13 +80,13 @@ def generate_psd_params():
     for i in range(1,50):
         # Diagonal elements
         params_temp = np.random.rand( int(n + (n**2 -n)/2.0) ).reshape(1,-1)
+    
         
         # ## lower Off-diagonal
         # off_diag = np.random.rand(int( (n**2-n)/2.0 ))
         
         # params_temp = np.append(diag, off_diag, axis = 0).reshape(1,-1)
         params = np.append( params, params_temp, axis = 0 )
-    
     return params
 
 # Set up environment
@@ -172,9 +96,18 @@ observation, info = env.reset(seed=42)
 
 polemass_length, gravity, length, masspole, total_mass, tau = torch.tensor(env.polemass_length), torch.tensor(env.gravity), torch.tensor(env.length), torch.tensor(env.masspole), torch.tensor(env.total_mass), torch.tensor(env.tau)
 
+# Initialize sim parameters
+t = 0
+dt_inner = 0.02
+dt_outer = 0.06 # 0.02 # first video with 0.06
+outer_loop = 4#4#10 #2
+
 # Initialize parameters
+H_learning_gp = 120 #60
+H_policy_run_time = int(H_learning_gp / 2 * outer_loop)
 N = 50
-H = 100#20
+H = 20 # prediction horizon
+
 np.random.seed(0)
 param_w = np.random.rand(N) - 0.5#+ 0.5#+ 2.0  #0.5 work with Lr: 5.0
 param_mu = np.random.rand(4,N) - 0.5 * np.ones((4,N)) #- 3.5 * np.ones((4,N))
@@ -187,12 +120,7 @@ noise = torch.tensor(0.1, dtype=torch.float)
 first_run = True
 # X = torch.rand(4).reshape(-1,1)
 
-# Initialize sim parameters
-t = 0
-dt_inner = 0.02
-dt_outer = 0.06 # 0.02 # first video with 0.06
-gp_learn_loop = 20
-outer_loop = 2#4#10 #2
+
 
 
 train_x = []#np.array( [ 0, 0, 0, 0, 0 ] ).reshape(1,-1)
@@ -226,8 +154,8 @@ def simulate_scenario( gp, train_x, train_y, use_policy=False, randomize=False, 
     cur_pose = np.copy(env.get_state())
     prev_pose = np.copy(cur_pose)
     
-    for i in range(60): #300 time steps
-                       
+    for i in range(H_learning_gp): #300 time steps
+        # print(f"i:{i}")               
         # Find input
         state = env.get_state()        
         state_torch = torch.tensor( state, dtype=torch.float )
@@ -242,7 +170,8 @@ def simulate_scenario( gp, train_x, train_y, use_policy=False, randomize=False, 
             else:
                 action = policy( env.w_torch, env.mu_torch, env.Sigma_torch, state_torch )
         else:
-            action = torch.tensor(10*(np.random.rand() - 0.5),dtype=torch.float)
+            # action = torch.tensor(10*(np.random.rand() - 0.5),dtype=torch.float)
+            action = torch.tensor(20*(np.random.randint(2, size=1) - 0.5),dtype=torch.float)
             
         
         if (abs(action.item()))>20:
@@ -336,7 +265,7 @@ def simulate_scenario( gp, train_x, train_y, use_policy=False, randomize=False, 
     ax[1,1].plot( index_n, train_y_temp[:,3], 'r' )
     ax[1,1].plot( index_n, mu[:,3], 'g' )
     ax[1,1].fill_between(index_n, mu[:,3] - 2*np.sqrt(covar[:,3]), mu[:,3] + 2*np.sqrt(covar[:,3]), alpha=0.2, color = 'm')
-    # plt.show()
+    plt.show()
     fig.savefig(run_name)
     
     return gp, train_x, train_y
@@ -345,6 +274,8 @@ def simulate_scenario( gp, train_x, train_y, use_policy=False, randomize=False, 
     
     
 def optimize_policy(env, gp, params, initialize_new_policy=False, lr_rate = 0.4):
+    
+    observation, info = env.reset(seed=42)
     
     param_w = params[0]
     param_mu = params[1]
@@ -362,33 +293,54 @@ def optimize_policy(env, gp, params, initialize_new_policy=False, lr_rate = 0.4)
     
     state_torch = torch.tensor( state, dtype=torch.float )        
     initialize_tensors( env, param_w, param_mu, param_Sigma )
+    
+    t = 0
+    for i in range( H_policy_run_time ):
+        # print("hello")
+        if i==100:
+            lr_rate = lr_rate / 2
+        elif i == 120:
+            lr_rate = lr_rate / 2
+        elif i==150:
+            lr_rate = lr_rate / 2
+        elif i==180:
+            lr_rate = lr_rate / 2
+        
+        if (i % outer_loop != 0) or i<1:
+            # print(f"i:{i}")
+            # move state forward
+            state_torch = torch.tensor( state, dtype=torch.float )
+            action = policy( env.w_torch, env.mu_torch, env.Sigma_torch, state_torch )
+            
+            if (abs(action.item()))>20:
+                print("ERROR*************************")
+                exit()
+            observation, reward, terminated, truncated, info = env.step(action.item())
+            env.render()
+            t = t + dt_inner
+            
+            if terminated or truncated:
+                observation, info = env.reset()
+                
+        else:
+            
+            initialize_tensors( env, param_w, param_mu, param_Sigma )
 
-    # env state does not change. always start from the same state
-    success = False
-    iter = 0
-    while not success and iter < 10:
-        
-        if iter==4:
-            lr_rate = lr_rate / 2
-        elif iter == 8:
-            lr_rate = lr_rate / 2
-        
-        maintain_constraints, improve_constraints, success, reward = get_future_reward( env, gp, [env.w_torch, env.mu_torch, env.Sigma_torch] )
-        success = success and (reward[-1]<-90)
-        print(f"Iteration number: {iter}, Terminal reward: {reward[-1]}")
-        grads = constrained_update( reward, maintain_constraints, improve_constraints, [env.w_torch, env.mu_torch, env.Sigma_torch] )
-        
-        grads = np.clip( grads, -2.0, 2.0 )
-        # print(grads)
-        param_w = np.clip(param_w + lr_rate * grads[0:param_w.size][:,0], -10, 10 )
-        param_mu = np.clip(param_mu + lr_rate * grads[param_w.size:param_w.size + param_mu.size].reshape( 4, 50 ), -10, 10 )
-        param_Sigma = np.clip(param_Sigma + lr_rate * grads[param_w.size + param_mu.size:].reshape( 50, 10 ), -1.0, 1.0 )
-        initialize_tensors( env, param_w, param_mu, param_Sigma )
-        # print(f"params w:{param_w}, mu:{param_w}, Sigma:{param_Sigma}"
-        
-        iter = iter + 1
-    print("Successfully made it feasible")  
-        
+
+            reward = get_future_reward( env, gp, [env.w_torch, env.mu_torch, env.Sigma_torch] ) 
+            reward.backward(retain_graph = True)                
+            w_grad = getGrad( env.w_torch, l_bound = -2, u_bound = 2 )
+            mu_grad = getGrad( env.mu_torch, l_bound = -2, u_bound = 2 )
+            Sigma_grad = getGrad( env.Sigma_torch, l_bound = -2, u_bound = 2 )
+            param_w = np.clip(param_w - lr_rate * w_grad, -10, 10 )
+            param_mu = np.clip(param_mu - lr_rate * mu_grad, -10, 10 )
+            param_Sigma = np.clip(param_Sigma - lr_rate * Sigma_grad, -1.0, 1.0 )
+            # print(f"params w:{param_w}, mu:{param_w}, Sigma:{param_Sigma}")
+
+            initialize_tensors(env, param_w, param_mu, param_Sigma)
+                
+            print(f" i:{i} Successfully made it feasible! reward:{reward.item()}") 
+            
     return env, [param_w, param_mu, param_Sigma]
 
 params = [param_w, param_mu, param_Sigma]
@@ -397,19 +349,25 @@ train_y = []
 gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit0.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit1.png")
+
+# env_to_render = CustomCartPoleEnv(render_mode="human")#rgb_array
+# env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/", name_prefix="cartpole_constrained_H20" )
+# observation, info = env.reset(seed=42)
+# initialize_tensors( env, param_w, param_mu, param_Sigma )
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit1.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit2.png")
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit2.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit3.png")
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit3.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
-gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=False, randomize=False, run_name = "gp_fit4.png")
+gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit4.png")
 env, params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 
 gp, train_x, train_y = simulate_scenario(gp, train_x, train_y, use_policy=True, randomize=False, run_name = "gp_fit5.png")
+
 # params = optimize_policy( env, gp, params, initialize_new_policy=False, lr_rate = lr_rate )
 # initialize_tensors( env, param_w, param_mu, param_Sigma )
 

@@ -86,7 +86,7 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # Angle at which to fail the episode
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
         # self.x_threshold = 2.4
-        self.x_threshold = 7.0 #5.0
+        self.x_threshold = 15.0#7.0 #5.0
 
         # Angle limit set to 2 * theta_threshold_radians so failing observation
         # is still within bounds.
@@ -163,10 +163,10 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             theta_dot = theta_dot + self.tau * thetaacc
             theta = self.clip_theta(theta + self.tau * theta_dot)
             
-        if x > self.x_threshold:
-            x = 0 #self.x_threshold
-        elif x < -self.x_threshold:
-            x = 0 #-self.x_threshold
+        # if x > self.x_threshold:
+        #     x = 0 #self.x_threshold
+        # elif x < -self.x_threshold:
+        #     x = 0 #-self.x_threshold
             
         # print(f"pos: {x}, theta:{theta}")
 
@@ -255,7 +255,7 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         )  # default high
         self.state = self.np_random.uniform(low=low, high=high, size=(4,))
         self.state[2] = np.pi 
-        self.state[0] = - self.x_threshold + 0.2
+        self.state[0] =  - self.x_threshold / 2 #- self.x_threshold + 0.2
         self.steps_beyond_terminated = None
 
         if self.render_mode == "human":
