@@ -64,6 +64,7 @@ def policy(param_w, param_mu, param_Sigma, X):
     return pi
 
 traced_policy = policy #torch.jit.trace( policy, ( robot.w_torch, robot.mu_torch, robot.Sigma_torch, mean_position ) )        
+# traced_policy = torch.jit.trace( policy, ( robot.w_torch, robot.mu_torch, robot.Sigma_torch, mean_position ) )     
         
 # print("Testing Cart Pole Policy")
 

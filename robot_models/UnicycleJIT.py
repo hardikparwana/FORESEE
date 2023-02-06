@@ -2,11 +2,11 @@ import numpy as np
 import torch
 from utils.utilsJIT import *
 
-@torch.jit.script    
+# @torch.jit.script    
 def unicycle_f_torch_jit(x):
     return torch.tensor([0.0,0.0,0.0],dtype=torch.float).reshape(-1,1)
 
-@torch.jit.script
+# @torch.jit.script
 def unicycle_g_torch_jit(x):
     # return torch.tensor([ [torch.cos(x[2,0]),0.0],[torch.sin(x[2,0]),0.0],[0,1] ])
     g1 = torch.cat( (torch.cos(x[2,0]).reshape(-1,1),torch.tensor([[0]]) ), dim=1 )
@@ -16,21 +16,21 @@ def unicycle_g_torch_jit(x):
     gx = torch.cat((g1,g2,g3))
     return gx
 
-@torch.jit.script
+# @torch.jit.script
 def cat_tensors():
     return  torch.cat( [torch.tensor(1), torch.tensor(2) ], dim = 0)
 
-@torch.jit.script
+# @torch.jit.script
 def sigma_torch(s):
     k1 = 2.0
     return torch.div( (torch.exp(k1-s)-1) , (torch.exp(k1-s)+1) )
 
-@torch.jit.script
+# @torch.jit.script
 def sigma_der_torch(s):
     k1 = 2
     return -torch.div ( torch.exp(k1-s),( 1+torch.exp( k1-s ) ) ) @ ( 1 + sigma_torch(s) )
 
-@torch.jit.script
+# @torch.jit.script
 def unicycle_SI2D_lyapunov_tensor_jit(X, G):
     min_D = 0.3
     max_D = 2.0
@@ -43,7 +43,7 @@ def unicycle_SI2D_lyapunov_tensor_jit(X, G):
     
     return V, dV_dxi, dV_dxj
 
-@torch.jit.script
+# @torch.jit.script
 def unicycle_SI2D_barrier_torch_jit(X, targetX): # target is unicycle
     beta = 1.01
     min_D = 0.3
@@ -63,7 +63,7 @@ def unicycle_SI2D_barrier_torch_jit(X, targetX): # target is unicycle
     
     return -h_final, -dh_dxi, -dh_dxj
     
-@torch.jit.script
+# @torch.jit.script
 def unicycle_SI2D_barrier_torch_jit(X, targetX): # target is unicycle
     beta = 1.01
     min_D = 0.3

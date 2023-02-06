@@ -7,7 +7,8 @@ def get_mean_JIT(sigma_points, weights):
     weighted_points = sigma_points * weights[0]
     mu = torch.sum( weighted_points, 1 ).reshape(-1,1)
     return mu
-traced_get_mean_JIT = get_mean_JIT #torch.jit.trace( get_mean_JIT, (torch.ones(4,9), torch.ones(1,9)/9.0 ) )
+# traced_get_mean_JIT = get_mean_JIT 
+traced_get_mean_JIT = torch.jit.trace( get_mean_JIT, (torch.ones(4,9), torch.ones(1,9)/9.0 ) )
 
 def get_mean_cov_JIT81(sigma_points, weights):
     
@@ -22,8 +23,8 @@ def get_mean_cov_JIT81(sigma_points, weights):
     
     # print(f"Checking for Nans: {torch.isnan(cov).any()}")
     return mu, cov
-# traced_get_mean_cov_JIT81 = torch.jit.trace( get_mean_cov_JIT81, (torch.ones( (4 , 81) ), 0.5 * torch.ones( (1,81) ) ) )
-traced_get_mean_cov_JIT81 = get_mean_cov_JIT81
+traced_get_mean_cov_JIT81 = torch.jit.trace( get_mean_cov_JIT81, (torch.ones( (4 , 81) ), 0.5 * torch.ones( (1,81) ) ) )
+# traced_get_mean_cov_JIT81 = get_mean_cov_JIT81
                                             
 # @torch.jit.script
 def get_ut_cov_root(cov):
@@ -97,9 +98,10 @@ def generate_sigma_points9_JIT( mu, cov_root, base_term, factor ):
 
 mu_t = torch.ones((4,1)).reshape(-1,1)
 cov_t = torch.tensor([ [ 1.0, 0.0, 0.0, 0.0 ], [0.0, 3.0, 0.0, 0.0], [0.0, 0.0, 4.0, 0.0], [0.0, 0.0, 0.0, 1.5] ])
-# traced_generate_sigma_points9_JIT = torch.jit.trace( generate_sigma_points9_JIT, ( mu_t, cov_t, torch.ones((4,1)), torch.tensor(1.0) ) )
-traced_generate_sigma_points9_JIT = generate_sigma_points9_JIT
-# def sigma_point_expand_JIT(GA, PE, gp_params, K_invs, noise, X_s, Y_s, sigma_points, weights, control, dt_outer, dt_inner, polemass_length, gravity, length, masspole, total_mass, tau):#, gps):
+traced_generate_sigma_points9_JIT = torch.jit.trace( generate_sigma_points9_JIT, ( mu_t, cov_t, torch.ones((4,1)), torch.tensor(1.0) ) )
+# traced_generate_sigma_points9_JIT = generate_sigma_points9_JIT
+
+
 def sigma_point_expand_JIT(sigma_points, weights, control, dt_outer, gp):#, gps):
    
     n, N = sigma_points.shape       
@@ -150,9 +152,6 @@ def sigma_point_expand_JIT(sigma_points, weights, control, dt_outer, gp):#, gps)
         mu = torch.cat((pred1.mean, pred2.mean, pred3.mean, pred4.mean)).reshape(-1,1)
         cov = torch.diag(torch.cat((torch.diagonal(pred1.covariance_matrix), torch.diagonal(pred2.covariance_matrix), torch.diagonal(pred3.covariance_matrix), torch.diagonal(pred4.covariance_matrix))))
     
-        
-        
-        
         # if 1:#torch.norm(torch.diagonal(cov))>40:
         #   print(f"cov: {cov[0,0]}. {cov[1,1]}, {cov[2,2]}, {cov[3,3]}") 
         # # min_v = torch.min(torch.norm(gp.train_inputs[0] - input_x, dim=1))
@@ -173,12 +172,6 @@ def sigma_point_compress_JIT( sigma_points, weights ):
     return traced_generate_sigma_points9_JIT( mu, cov_root_term, base_term, torch.tensor(1.0) )
 traced_sigma_point_compress_JIT = sigma_point_compress_JIT
 
-def reward_UT_Mean_Evaluator_basic(sigma_points, weights):
-    mu = compute_reward_jit( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
-    for i in range(1, sigma_points.shape[1]):
-        mu = mu + compute_reward_jit( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
-    return mu
-
 def compute_reward_jit( state ):
     theta = state[2,0] # want theta and theta_dot to be 0
     speed = state[1,0]
@@ -187,6 +180,14 @@ def compute_reward_jit( state ):
     return - 100 * torch.cos(theta) + 0.1 * torch.square(speed)
     # return - 100 * torch.cos(theta) + 0.1 * torch.square(pos) + 0.1 * torch.square(speed)
     # return - 100 * torch.cos(theta) + 0.1 * torch.square(pos)
+
+def reward_UT_Mean_Evaluator_basic(sigma_points, weights):
+    mu = compute_reward_jit( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
+    for i in range(1, sigma_points.shape[1]):
+        mu = mu + compute_reward_jit( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
+    return mu
+traced_reward_UT_Mean_Evaluator_basic = torch.jit.trace( reward_UT_Mean_Evaluator_basic, ( torch.ones(4,9), torch.ones(1,9) ) )
+# traced_reward_UT_Mean_Evaluator_basic = reward_UT_Mean_Evaluator_basic
+
+
     
-# traced_reward_UT_Mean_Evaluator_basic = torch.jit.trace( reward_UT_Mean_Evaluator_basic, ( torch.ones(4,9), torch.ones(1,9) ) )
-traced_reward_UT_Mean_Evaluator_basic = reward_UT_Mean_Evaluator_basic
