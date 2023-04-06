@@ -1,0 +1,5 @@
+numpy
+pip install --upgrade "jax[cpu]"
+pip install notebook
+pip install matplotlib
+pygame moviepy gym-recording==0.0.1 gym==0.26.0

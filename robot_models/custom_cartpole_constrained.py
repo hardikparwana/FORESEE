@@ -12,7 +12,6 @@ import gym
 from gym import logger, spaces
 from gym.envs.classic_control import utils
 from gym.error import DependencyNotInstalled
-import torch
 
 # For recording
 # from gym_recording.wrappers import TraceRecordingWrapper
@@ -115,7 +114,6 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.steps_beyond_terminated = None
         
         # tensors
-        self.X_torch = []
         self.param_w = []
         self.param_mu = []
         self.param_Sigma = []
@@ -131,6 +129,10 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     def get_state(self):
         x, x_dot, theta, theta_dot = self.state
         return np.array([x, x_dot, theta, theta_dot]).reshape(-1,1)
+    
+    def set_state(self, state):
+        self.state = state
+    
 
     def step(self, action):
         # err_msg = f"{action!r} ({type(action)}) invalid"
@@ -200,45 +202,9 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             self.steps_beyond_terminated += 1
             reward = 0.0
 
-        if self.render_mode == "human":
-            self.render()
+        # if self.render_mode == "human":
+        #     self.render()
         return np.array(self.state, dtype=np.float32), reward, terminated, False, {}
-
-    def step_torch(self, X, action):
-            # err_msg = f"{action!r} ({type(action)}) invalid"
-        # assert self.action_space.contains(action), err_msg
-        assert self.state is not None, "Call reset before using step method."
-        x, x_dot, theta, theta_dot = X[0,0], X[1,0], X[2,0], X[3,0]
-        # force = self.force_mag if action == 1 else -self.force_mag
-        force = action
-        costheta = math.cos(theta)
-        sintheta = math.sin(theta)
-
-        # For the interested reader:
-        # https://coneural.org/florian/papers/05_cart_pole.pdf
-        temp = (
-            force + self.polemass_length * torch.square(theta_dot) * sintheta
-        ) / self.total_mass
-        thetaacc = (self.gravity * sintheta - costheta * temp) / (
-            self.length * (4.0 / 3.0 - self.masspole * torch.square(costheta) / self.total_mass)
-        )
-        xacc = temp - self.polemass_length * thetaacc * costheta / self.total_mass
-
-        if self.kinematics_integrator == "euler":
-            x = x + self.tau * x_dot
-            x_dot = x_dot + self.tau * xacc
-            theta = self.clip_theta(theta + self.tau * theta_dot)
-            theta_dot = theta_dot + self.tau * thetaacc
-        else:  # semi-implicit euler
-            x_dot = x_dot + self.tau * xacc
-            x = x + self.tau * x_dot
-            theta_dot = theta_dot + self.tau * thetaacc
-            theta = self.clip_theta(theta + self.tau * theta_dot)
-            
-        X_next = torch.cat( ( x.reshape(-1,1), x_dot.reshape(-1,1), theta.reshape(-1,1), theta_dot.reshape(-1,1) ), dim = 0 )
-
-        return np.array(self.state, dtype=np.float32)
-
 
     def reset(
         self,
@@ -283,6 +249,7 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         if self.clock is None:
             self.clock = pygame.time.Clock()
 
+        # print("hello")
         world_width = self.x_threshold * 2
         scale = self.screen_width / world_width
         polewidth = 10.0
@@ -294,7 +261,7 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             return None
 
         x = self.state
-
+        print(f"x:{x[0]}, theta:{x[2]}")
         self.surf = pygame.Surface((self.screen_width, self.screen_height))
         self.surf.fill((255, 255, 255))
 
@@ -342,11 +309,13 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.surf = pygame.transform.flip(self.surf, False, True)
         self.screen.blit(self.surf, (0, 0))
         if self.render_mode == "human":
+            print("h1")
             pygame.event.pump()
             self.clock.tick(self.metadata["render_fps"])
             pygame.display.flip()
 
         elif self.render_mode == "rgb_array":
+            print("h2")
             return np.transpose(
                 np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
             )
@@ -359,52 +328,20 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             pygame.quit()
             self.isopen = False
 
-def get_state_dot_torch(X, action, polemass_length, gravity, length, masspole, total_mass, tau):
+# env_to_render = CustomCartPoleEnv(render_mode="rgb_array")
+# # env = TraceRecordingWrapper(env)
+# # env = gym.wrappers.Monitor(env, "recording",force=True)
+# env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/", name_prefix="Excartpole" )
+# # env.start_video_recorder()
+# observation, info = env.reset(seed=42)
+
+# for _ in range(100):
+#     action = env.action_space.sample()
+#     observation, reward, terminated, truncated, info = env.step(action)
+#     env.render()
+
+#     if terminated or truncated:
+#         observation, info = env.reset()
         
-        x, x_dot, theta, theta_dot = X[0,0], X[1,0], X[2,0], X[3,0]
-        # force = self.force_mag if action == 1 else -self.force_mag
-        force = action
-        costheta = torch.cos(theta)
-        sintheta = torch.sin(theta)
-
-        # For the interested reader:
-        # https://coneural.org/florian/papers/05_cart_pole.pdf
-        temp = (
-            force + polemass_length * torch.square(theta_dot) * sintheta
-        ) / total_mass
-        thetaacc = (gravity * sintheta - costheta * temp) / (
-            length * (4.0 / 3.0 - masspole * torch.square(costheta) / total_mass)
-        )
-        xacc = temp - polemass_length * thetaacc * costheta / total_mass
-
-        X_dot = torch.cat( ( x_dot.reshape(-1,1), xacc.reshape(-1,1), theta_dot.reshape(-1,1), thetaacc.reshape(-1,1) ), dim = 0 )
-
-        return X_dot 
-    
-def get_state_dot_noisy_torch(X, action, polemass_length, gravity, length, masspole, total_mass, tau):
-    X_dot = get_state_dot_torch(X, action, polemass_length, gravity, length, masspole, total_mass, tau)
-    # error_square = torch.square(X_dot)
-    error_square = torch.square(X_dot/2)
-    cov = torch.diag( error_square[:,0] )
-    # cov = torch.zeros((4,4))
-    X_dot = X_dot + X_dot/3 #X_dot = X_dot + X_dot/6
-    return X_dot, cov
-    
-    
-env_to_render = CustomCartPoleEnv(render_mode="rgb_array")
-# env = TraceRecordingWrapper(env)
-# env = gym.wrappers.Monitor(env, "recording",force=True)
-env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/", name_prefix="Excartpole" )
-# env.start_video_recorder()
-observation, info = env.reset(seed=42)
-
-for _ in range(100):
-    action = env.action_space.sample()
-    observation, reward, terminated, truncated, info = env.step(action)
-    env.render()
-
-    if terminated or truncated:
-        observation, info = env.reset()
-        
-env.close_video_recorder()
-env.close()
+# env.close_video_recorder()
+# env.close()

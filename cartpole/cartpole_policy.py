@@ -1,44 +1,33 @@
-import torch
-
+import jax.numpy as np
+from jax import random, jit
+# import numpy
+import time
 # Nonlinear RBF network
-def policy(param_w, param_mu, param_Sigma, X):
+def policy(params_policy, X):
     n = 4 # dim of state
     m = 1 # dim of input
     N = 50 # number of basis functions
     
-    # Sigma = torch.diag( param_Sigma[0:4] )
-    # Sigma[0,1] = param_Sigma[5]
-    # Sigma[1,0] = param_Sigma[5]
-    
-    # Sigma[0,2] = param_Sigma[6]
-    # Sigma[2,0] = param_Sigma[6]
-    
-    # Sigma[0,3] = param_Sigma[7]
-    # Sigma[3,0] = param_Sigma[7]
-    
-    # Sigma[1,2] = param_Sigma[8]
-    # Sigma[2,1] = param_Sigma[8]
-    
-    # Sigma[1,3] = param_Sigma[9]
-    # Sigma[3,1] = param_Sigma[9]
-    # Sigma_inv = torch.inverse( Sigma )
-    # Sigma_inv = torch.inverse( param_Sigma )
-
+    param_w = params_policy[0:N]
+    param_mu = params_policy[N:4*N+N].reshape(4,N)
+    param_Sigma = params_policy[4*N+N:4*N+N+10*N].reshape(10,N)
+  
     # First basis function
     diff = X - param_mu[:,0].reshape(-1,1)
-    # phi = torch.exp( -0.5 * diff.T @ Sigma_inv @ diff )        
-    
-    # Givenb matrix
-    # phi = torch.exp( -0.5 * diff.T @ torch.inverse(param_Sigma[:,:,0]) @ diff ) 
-    
+  
     # Given lower triangular
-    Sigma = torch.diag( param_Sigma[0,0:4] )
-    Sigma[1,0] = param_Sigma[ 0, 4 ]; Sigma[2,0] = param_Sigma[ 0, 5 ]; Sigma[2,1] = param_Sigma[ 0, 6 ]; Sigma[3,0] = param_Sigma[ 0, 7 ]; Sigma[3,1] = param_Sigma[ 0, 8 ]; Sigma[3,2] = param_Sigma[ 0, 9 ];
-    Sigma_final = 4 * torch.eye(4) + torch.transpose(Sigma, 0, 1) @ Sigma
-    phi = torch.exp( -0.5 * diff.T @ torch.inverse(Sigma_final) @ diff )
+    Sigma = np.diag( param_Sigma[0,0:4] )
+    
+    Sigma = Sigma.at[1,0].set(param_Sigma[ 0, 4 ])
+    Sigma = Sigma.at[2,0].set(param_Sigma[ 0, 5 ])
+    Sigma = Sigma.at[2,1].set(param_Sigma[ 0, 6 ])
+    Sigma = Sigma.at[3,0].set(param_Sigma[ 0, 7 ])
+    Sigma = Sigma.at[3,1].set(param_Sigma[ 0, 8 ])
+    Sigma = Sigma.at[3,2].set(param_Sigma[ 0, 9 ])
+
+    Sigma_final = 4 * np.eye(4) + Sigma.T @ Sigma
+    phi = np.exp( -0.5 * diff.T @ np.linalg.inv(Sigma_final) @ diff )
         
-    # phi = torch.exp( -0.5 * diff.T @ torch.inverse(torch.diag(param_Sigma)) @ diff )     
-    # phi = torch.exp( -0.5 * diff.T @ torch.inverse(torch.diag(param_Sigma[:,0])) @ diff )   
     pi = param_w[0] * phi
     
     # Remaining basis functions
@@ -47,30 +36,40 @@ def policy(param_w, param_mu, param_Sigma, X):
         # phi = torch.exp( -0.5 * diff.T @ Sigma_inv @ diff )
         
         # Given lower triangular params
-        Sigma = torch.diag( param_Sigma[i,0:4] )
-        Sigma[1,0] = param_Sigma[ i, 4 ]; Sigma[2,0] = param_Sigma[ i, 5 ]; Sigma[2,1] = param_Sigma[ i, 6 ]; Sigma[3,0] = param_Sigma[ i, 7 ]; Sigma[3,1] = param_Sigma[ i, 8 ]; Sigma[3,2] = param_Sigma[ i, 9 ];
-        Sigma_final = 4 * torch.eye(4) + torch.transpose(Sigma, 0, 1) @ Sigma
-        phi = torch.exp( -0.5 * diff.T @ torch.inverse(Sigma_final) @ diff )
+        Sigma = np.diag( param_Sigma[i,0:4] )
+        Sigma = Sigma.at[1,0].set(param_Sigma[ 0, 4 ])
+        Sigma = Sigma.at[2,0].set(param_Sigma[ 0, 5 ])
+        Sigma = Sigma.at[2,1].set(param_Sigma[ 0, 6 ])
+        Sigma = Sigma.at[3,0].set(param_Sigma[ 0, 7 ])
+        Sigma = Sigma.at[3,1].set(param_Sigma[ 0, 8 ])
+        Sigma = Sigma.at[3,2].set(param_Sigma[ 0, 9 ])
+        Sigma_final = 4 * np.eye(4) + Sigma.T @ Sigma
+        phi = np.exp( -0.5 * diff.T @ np.linalg.inv(Sigma_final) @ diff )
         
-        # given matrices
-        # phi = torch.exp( -0.5 * diff.T @ torch.inverse(param_Sigma[:,:,i]) @ diff )
-        
-        # phi = torch.exp( -0.5 * diff.T @ torch.inverse(torch.diag(param_Sigma)) @ diff )
-        # phi = torch.exp( -0.5 * diff.T @ torch.inverse(torch.diag(param_Sigma[:,i])) @ diff )
         pi = pi + param_w[i] * phi
         
-    if torch.abs( pi ) > 10:
-        pi = pi / torch.abs(pi) * 10
+    # if np.abs( pi ) > 10:
+    #     pi = pi / np.abs(pi) * 10
     return pi
 
-traced_policy = policy #torch.jit.trace( policy, ( robot.w_torch, robot.mu_torch, robot.Sigma_torch, mean_position ) )        
-        
+policy_jit = policy
+
 # print("Testing Cart Pole Policy")
 
-# N = 50
-# param_w = torch.rand(N)
-# param_mu = torch.rand((4,N))
-# param_Sigma = torch.rand(10)
-# X = torch.rand(4).reshape(-1,1)
-# u = policy( param_w, param_mu, param_Sigma, X )
-# print("u", u)
+# test_key = random.PRNGKey(0)
+# test_N = 50
+# test_param_w = random.uniform(test_key, shape=(test_N,1))[:,0] #numpy.random.rand(N)
+# test_param_mu = random.uniform(test_key, shape=(4,test_N))#numpy.random.rand(4,N)
+# test_param_Sigma = random.uniform(test_key, shape=(test_N,10)) #numpy.random.rand(N,10)
+# test_X = random.uniform(test_key, shape=(4,1)) #numpy.random.rand(4).reshape(-1,1)
+
+# policy_jit = jit(policy)
+
+# # run once to force JIT compilation
+# test_u = policy_jit( test_param_w, test_param_mu, test_param_Sigma, test_X )
+
+
+# t0 = time.time()
+# test_u = policy_jit( test_param_w, test_param_mu, test_param_Sigma, test_X )
+# print(f"time:{time.time()-t0}")
+# print("u", test_u)
