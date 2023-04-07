@@ -52,7 +52,7 @@ def policy(params_policy, X):
     #     pi = pi / np.abs(pi) * 10
     return pi
 
-policy_jit = policy
+policy_jit = jit(policy)
 
 # print("Testing Cart Pole Policy")
 

@@ -1,10 +1,12 @@
 import jax.numpy as np
+from jax import jit
 from robot_models.cartpole2D import get_state_dot_noisy
 
 def get_mean( sigma_points, weights ):
     weighted_points = sigma_points * weights[0]
     mu = np.sum( weighted_points, 1 ).reshape(-1,1)
     return mu
+get_mean_jit = jit(get_mean)
 
 def get_mean_cov(sigma_points, weights):
     
@@ -17,12 +19,14 @@ def get_mean_cov(sigma_points, weights):
     weighted_centered_points = centered_points * weights[0] 
     cov = weighted_centered_points @ centered_points.T
     return mu, cov
+get_mean_cov_jit = jit(get_mean_cov)
 
 def get_ut_cov_root(cov):
     k = -1
     n = cov.shape[0]
     root_term = jax.scipy.linalg.sqrtm((n+k)*cov)
     return root_term
+get_ut_cov_root_jit = jit(get_ut_cov_root)
 
 def get_ut_cov_root_diagonal(cov):
     k = -1
@@ -36,6 +40,7 @@ def get_ut_cov_root_diagonal(cov):
     #TODO: check this formula
     root_term = (n+k) * np.diag( np.array([root0, root1, root2, root3]) )
     return root_term
+get_ut_cov_root_diagonal_jit = jit(get_ut_cov_root_diagonal)
 
 def initialize_sigma_points(X):
     # return 2N + 1 points
@@ -44,6 +49,7 @@ def initialize_sigma_points(X):
     sigma_points = np.repeat( X, num_points, axis=1 )
     weights = np.ones((1,num_points)) * 1.0/( num_points )
     return sigma_points, weights
+initialize_sigma_points_jit = jit(initialize_sigma_points)
 
 def generate_sigma_points( mu, cov_root, base_term, factor ):
     
@@ -64,7 +70,7 @@ def generate_sigma_points( mu, cov_root, base_term, factor ):
         new_weights = np.append( new_weights, np.array([[1.0*k/(n+k)]]), axis = 1 )
 
     return new_points, new_weights
-
+generate_sigma_points_jit = jit(generate_sigma_points)
 
 # def sigma_point_expand_JIT(GA, PE, gp_params, K_invs, noise, X_s, Y_s, sigma_points, weights, control, dt_outer, dt_inner, polemass_length, gravity, length, masspole, total_mass, tau):#, gps):
 def sigma_point_expand(sigma_points, weights, control, dt_outer, dynamics_params):#, gps):
@@ -86,21 +92,26 @@ def sigma_point_expand(sigma_points, weights, control, dt_outer, dynamics_params
         new_weights = np.append( new_weights, (temp_weights * weights[0,i]).reshape(1,-1) , axis=1 )
 
     return new_points, new_weights
+sigma_point_expand_jit = jit(sigma_point_expand)
 
 def sigma_point_compress( sigma_points, weights ):
     mu, cov = get_mean_cov( sigma_points, weights )
     cov_root_term = get_ut_cov_root_diagonal( cov )  
     base_term = np.zeros((mu.shape))
     return generate_sigma_points( mu, cov_root_term, base_term, np.array([1.0]) )
+sigma_point_compress_jit = jit(sigma_point_compress)
+
 
 def reward_UT_Mean_Evaluator_basic(sigma_points, weights):
     mu = compute_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
     for i in range(1, sigma_points.shape[1]):
         mu = mu + compute_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
     return mu
+reward_UT_Mean_Evaluator_basic_jit = jit(reward_UT_Mean_Evaluator_basic)
 
 def compute_reward( state ):
     theta = state[2,0] # want theta and theta_dot to be 0
     speed = state[1,0]
     pos = state[0,0]
     return - 100 * np.cos(theta) + 0.1 * np.square(speed)
+compute_reward_jit = jit(compute_reward)

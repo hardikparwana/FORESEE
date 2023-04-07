@@ -31,7 +31,7 @@ def generate_psd_params():
 def get_future_reward(X, horizon, dt_outer, dynamics_params, params_policy):
     states, weights = initialize_sigma_points(X)
     reward = 0
-    for i in range(20):  
+    for i in range(3):  
         mean_position = get_mean( states, weights )
         solution = policy( params_policy, mean_position )
         next_states_expanded, next_weights_expanded = sigma_point_expand( states, weights, solution, dt_outer, dynamics_params)#, gps )        
@@ -67,7 +67,7 @@ params_policy = np.append( param_w, np.append( param_mu.reshape(-1,1)[:,0], para
 t = 0
 dt_inner = 0.02
 dt_outer = 0.1
-tf = 20
+tf = 0.06
 
 state = np.copy(env.get_state())
 
