@@ -120,6 +120,7 @@ t0 = time.time()
 get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy, Sigma_invs)
 print(f"time jit for: {time.time()-t0}")
 # exit()
+
 while t < tf:
     
     action = policy_jit( params_policy, Sigma_invs, state )
