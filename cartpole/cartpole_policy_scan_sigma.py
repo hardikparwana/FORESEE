@@ -8,7 +8,7 @@ import time
 def policy(params_policy, X):
     # n = 4 # dim of state
     # N = 50 # number of basis functions  #50:593 , 30: 355. matmul instead of @ 444... gets slower
-    N = 30
+    N = 50
     n = 4
     param_w = params_policy[0:N]
     param_mu = params_policy[N:n*N+N].reshape(n,N)
@@ -31,9 +31,10 @@ def policy(params_policy, X):
         pi = pi + param_w[t] * phi
         return pi
     
-    return np.clip(lax.fori_loop( 0, N, body, pi ), -10, 10)
+    return np.clip(lax.fori_loop( 0, N, body, pi ), -20, 20)[0,0]
 
 policy_jit = jit(policy)
+policy_grad = grad(policy, 0)
 policy_grad_jit = jit(grad(policy))
 
 if 0:

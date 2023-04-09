@@ -85,7 +85,7 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # Angle at which to fail the episode
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
         # self.x_threshold = 2.4
-        self.x_threshold = 1.55 #2.0 #7.0 #5.0
+        self.x_threshold = 1.0#10.0#1.55 #2.0 #7.0 #5.0
 
         # Angle limit set to 2 * theta_threshold_radians so failing observation
         # is still within bounds.
@@ -161,10 +161,7 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             theta_dot = theta_dot + self.tau * thetaacc
         else:  # semi-implicit euler
             x_dot = x_dot + self.tau * xacc
-            x = x + self.tau * x_dot
-            theta_dot = theta_dot + self.tau * thetaacc
-            theta = self.clip_theta(theta + self.tau * theta_dot)
-            
+            x = x + self.tau * x_dot- 100 * np.cos(theta) + 0.1 * np.square(pos)
         # if x > self.x_threshold:
         #     x = 0 #self.x_threshold
         # elif x < -self.x_threshold:
@@ -190,7 +187,7 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         elif self.steps_beyond_terminated is None:
             # Pole just fell!
             self.steps_beyond_terminated = 0
-            reward = 1.0
+            reward = 1.0- 100 * np.cos(theta) + 0.1 * np.square(pos)
         else:
             if self.steps_beyond_terminated == 0:
                 logger.warn(
@@ -261,7 +258,7 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             return None
 
         x = self.state
-        print(f"x:{x[0]}, theta:{x[2]}")
+        # print(f"x:{x[0]}, theta:{x[2]}")
         self.surf = pygame.Surface((self.screen_width, self.screen_height))
         self.surf.fill((255, 255, 255))
 
@@ -309,13 +306,13 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.surf = pygame.transform.flip(self.surf, False, True)
         self.screen.blit(self.surf, (0, 0))
         if self.render_mode == "human":
-            print("h1")
+            # print("h1")
             pygame.event.pump()
             self.clock.tick(self.metadata["render_fps"])
             pygame.display.flip()
 
         elif self.render_mode == "rgb_array":
-            print("h2")
+            # print("h2")
             return np.transpose(
                 np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
             )
