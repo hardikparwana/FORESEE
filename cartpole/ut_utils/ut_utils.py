@@ -32,10 +32,10 @@ def get_ut_cov_root_diagonal(cov):
     k = 0.5#-1
     n = cov.shape[0]
     offset = 0.001
-    root0 = np.sqrt((n+k)*(offset+cov[0,0]))
-    root1 = np.sqrt((n+k)*(offset+cov[1,1]))
-    root2 = np.sqrt((n+k)*(offset+cov[2,2]))
-    root3 = np.sqrt((n+k)*(offset+cov[3,3]))
+    root0 = 0#np.sqrt((n+k)*(offset+cov[0,0]))
+    root1 = 0#np.sqrt((n+k)*(offset+cov[1,1]))
+    root2 = 0#np.sqrt((n+k)*(offset+cov[2,2]))
+    root3 = 0#np.sqrt((n+k)*(offset+cov[3,3]))
     # return cov
     root_term = np.diag( np.array([root0, root1, root2, root3]) )
     return root_term
@@ -57,8 +57,8 @@ def generate_sigma_points( mu, cov_root, base_term, factor ):
 
     # TODO
     k = 0.5 # n-3 # 0.5**
-
-    new_points = base_term + factor * mu
+    # new_points = base_term + factor * mu
+    new_points = step_using_xdot(base_term, mu, factor)
     new_weights = np.array([[1.0*k/(n+k)]])
     for i in range(n):
         # new_points = np.append( new_points, base_term + factor * (mu - cov_root[:,i].reshape(-1,1)) , axis = 1 )
@@ -85,13 +85,13 @@ generate_sigma_points_sum = lambda a,b,c,d : np.sum(generate_sigma_points(a,b,c,
 def sigma_point_expand(sigma_points, weights, control, dt_outer, dynamics_params):#, gps):
    
     n, N = sigma_points.shape   
-      
+    # dt_outer = 0  
     #TODO  
     mu, cov = get_state_dot_noisy(sigma_points[:,0].reshape(-1,1), control.reshape(-1,1), dynamics_params)
     root_term = get_ut_cov_root_diagonal(cov) 
     temp_points, temp_weights = generate_sigma_points( mu, root_term, sigma_points[:,0].reshape(-1,1), dt_outer )
     new_points = np.copy( temp_points )
-    new_weights = ( np.copy( temp_weights ) * weights[0,0]).reshape(1,-1)
+    new_weights = ( np.copy( temstep_using_xdotp_weights ) * weights[0,0]).reshape(1,-1)
         
     for i in range(1,N):
         mu, cov = get_state_dot_noisy(sigma_points[:,i].reshape(-1,1), control.reshape(-1,1), dynamics_params)
@@ -129,6 +129,8 @@ def compute_reward( state ):
     speed = state[1,0]
     pos = state[0,0]
     # return np.square(theta-0.0)
-    return -100*np.cos(theta)+0.1*np.square(speed)
+    # print(f"theta:{theta}")
+    return -10*np.cos(theta)#+0.08*np.square(pos/2)#+0.001*np.square(speed)
+    # return -100*np.cos(theta)+0.1*np.square(speed)+10*np.square(pos)
     return - 100 * np.cos(theta) + 0.1 * np.square(pos)
 compute_reward_jit = jit(compute_reward)

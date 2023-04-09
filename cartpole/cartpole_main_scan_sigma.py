@@ -60,7 +60,7 @@ policy_next_state3_grad = grad( policy_next_state3, 0 )
 def get_future_reward(X, horizon, dt_outer, dynamics_params, params_policy):
     states, weights = initialize_sigma_points(X)
     reward = 0
-    H = 10
+    H = 200
     def body(t, inputs):
         reward, states, weights = inputs
         mean_position = get_mean( states, weights )
@@ -135,7 +135,7 @@ params_policy = np.append( np.append( param_w, param_mu.reshape(-1,1)[:,0] ), pa
 t = 0
 dt_inner = 0.02
 dt_outer = 0.02
-tf = 4.0#0.06#8.0#4.0
+tf = 6.0#0.06#8.0#4.0
 
 state = np.copy(env.get_state())
 t0 = time.time()
@@ -144,7 +144,7 @@ print(f"Policy JITed in time: {time.time()-t0}")
 
 # RUN this
 get_future_reward( state, H, dt_outer, dynamics_params, params_policy )
-# get_future_reward_grad( state, H, dt_outer, dynamics_params, params_policy )
+# get_future_reward_grad( state, H, dt_outer, dynamics_pget_future_reward_minimizearams, params_policy )
 
 t0 = time.time()
 get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
@@ -184,7 +184,7 @@ while t < tf:
     params_w_mu_temp = np.clip( params_policy[0:N*n+N], -10, 10  )
     params_sigma_temp = np.clip( params_policy[N*n+N:], -1, 1 )
     params_policy = np.append( params_w_mu_temp, params_sigma_temp )
-    # print(f"reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}")
+    print(f"reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}")
 
     action = policy_jit( params_policy, state ).reshape(-1,1)
     # action_grad = np.max( policy_grad(params_policy, state) )
