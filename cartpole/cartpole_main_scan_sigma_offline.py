@@ -60,30 +60,30 @@ policy_next_state3_grad = grad( policy_next_state3, 0 )
 def get_future_reward(X, horizon, dt_outer, dynamics_params, params_policy):
     states, weights = initialize_sigma_points(X)
     reward = 0
-    H = 200
-    def body(t, inputs):
-        reward, states, weights = inputs
-        mean_position = get_mean( states, weights )
-        solution = policy( params_policy, mean_position )
-        # print(f"input: {solution}")
-        next_states_expanded, next_weights_expanded = sigma_point_expand( states, weights, solution, dt_outer, dynamics_params)#, gps )        
-        next_states, next_weights = sigma_point_compress( next_states_expanded, next_weights_expanded )
-        states = next_states
-        weights = next_weights
-        reward = reward + reward_UT_Mean_Evaluator_basic( states, weights )
-        return reward, states, weights
-    
-    return lax.fori_loop( 0, H, body, (reward, states, weights) )[0]
-
-    # for i in range(H):
+    H = 300
+    # def body(t, inputs):
+    #     reward, states, weights = inputs
     #     mean_position = get_mean( states, weights )
-    #     solution = policy( params_policy, mean_position ).reshape(-1,1)
+    #     solution = policy( params_policy, mean_position )
     #     # print(f"input: {solution}")
     #     next_states_expanded, next_weights_expanded = sigma_point_expand( states, weights, solution, dt_outer, dynamics_params)#, gps )        
     #     next_states, next_weights = sigma_point_compress( next_states_expanded, next_weights_expanded )
     #     states = next_states
     #     weights = next_weights
     #     reward = reward + reward_UT_Mean_Evaluator_basic( states, weights )
+    #     return reward, states, weights
+    
+    # return lax.fori_loop( 0, H, body, (reward, states, weights) )[0]
+
+    for i in range(H):
+        mean_position = get_mean( states, weights )
+        solution = policy( params_policy, mean_position ).reshape(-1,1)
+        # print(f"input: {solution}")
+        next_states_expanded, next_weights_expanded = sigma_point_expand( states, weights, solution, dt_outer, dynamics_params)#, gps )        
+        next_states, next_weights = sigma_point_compress( next_states_expanded, next_weights_expanded )
+        states = next_states
+        weights = next_weights
+        reward = reward + reward_UT_Mean_Evaluator_basic( states, weights )
 
     # mean_position = get_mean( states, weights )
     # solution = policy( params_policy, mean_position ).reshape(-1,1)
@@ -112,8 +112,8 @@ get_future_reward_grad_jit = jit(get_future_reward_grad)
 
 
 # Set up environment
-env_to_render = CustomCartPoleEnv(render_mode="human")
-env = RecordVideo( env_to_render, video_folder="/home/dasc/hardik/videos/", name_prefix="cartpole_default_inverted" )
+env_to_render = CustomCartPoleEnv(render_mode="rgb_array")
+env = RecordVideo( env_to_render, video_folder="/home/dasc/hardik/videos/", name_prefix="cartpole_offline" )
 observation, info = env.reset(seed=42)
 
 polemass_length, gravity, length, masspole, total_mass, tau = env.polemass_length, env.gravity, env.length, env.masspole, env.total_mass, env.tau
@@ -123,7 +123,7 @@ dynamics_params = np.array([ polemass_length, gravity, length, masspole, total_m
 n = 4
 N = 50
 H = 20
-lr_rate = 1.0#0.1#1.0##0.01
+lr_rate = 0.006#0.03#1.0#0.1#1.0##0.01
 key = random.PRNGKey(100)
 key, subkey = random.split(key)
 param_w = 1.0*(random.uniform(subkey, shape=(N,1))[:,0] - 0.5)#+ 0.5#+ 2.0  #0.5 work with Lr: 5.0
@@ -133,8 +133,8 @@ param_Sigma = generate_psd_params() # 10,N
 params_policy = np.append( np.append( param_w, param_mu.reshape(-1,1)[:,0] ), param_Sigma.reshape(-1,1)[:,0]  )
 
 t = 0
-dt_inner = 0.02
-dt_outer = 0.02
+dt_inner = 0.06
+dt_outer = 0.06
 tf = 6.0#0.06#8.0#4.0
 
 state = np.copy(env.get_state())
@@ -156,27 +156,20 @@ print(f"time jit for: {time.time()-t0}")
 # get_future_reward_minimize_jit = jit(get_future_reward_minimize)
 # get_future_reward_minimize_jit( params_policy )
 # print(f"time jit for: {time.time()-t0}")
-# res = minimize( get_future_reward_minimize_jit, params_policy, method='BFGS', tol=1e-6 )
+# res = minimize( get_future_reward_minimize_jit, params_policy, method='BFGS', tol=1e-8 )
 # params_policy = res.x
 
-# res = minimize_scipy( get_future_reward_minimize_jit, params_policy, method='Nelder-Mead', tol=1e-6 )
+# res = minimize_scipy( get_future_reward_minimize_jit, params_policy, method='Nelder-Mead', tol=1e-8 )
 # params_policy = res.x
 
 # train
-# for i in range(200):
-#     reward, param_policy_grad = get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
-#     param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
+for i in range(1000):
 
-#     params_policy = params_policy - lr_rate * param_policy_grad
-#     params_w_mu_temp = np.clip( params_policy[0:N*n+N], -10, 10  )
-#     params_sigma_temp = np.clip( params_policy[N*n+N:], -1, 1 )
-#     params_policy = np.append( params_w_mu_temp, params_sigma_temp )
-#     if i%1==0:
-#         print(f"i:{i}, reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}")
+    if i==200:
+        lr_rate = lr_rate / 2
+    if i==600:
+        lr_rate = lr_rate / 2
 
-while t < tf:
-
-    # tune parameters
     reward, param_policy_grad = get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
     param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
 
@@ -184,7 +177,19 @@ while t < tf:
     params_w_mu_temp = np.clip( params_policy[0:N*n+N], -10, 10  )
     params_sigma_temp = np.clip( params_policy[N*n+N:], -1, 1 )
     params_policy = np.append( params_w_mu_temp, params_sigma_temp )
-    print(f"reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}")
+    print(f"i:{i} reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}")
+
+while t < tf:
+
+    # tune parameters
+    # reward, param_policy_grad = get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
+    # param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
+
+    # params_policy = params_policy - lr_rate * param_policy_grad
+    # params_w_mu_temp = np.clip( params_policy[0:N*n+N], -10, 10  )
+    # params_sigma_temp = np.clip( params_policy[N*n+N:], -1, 1 )
+    # params_policy = np.append( params_w_mu_temp, params_sigma_temp )
+    # print(f"reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}")
 
     action = policy_jit( params_policy, state ).reshape(-1,1)
     # action_grad = np.max( policy_grad(params_policy, state) )

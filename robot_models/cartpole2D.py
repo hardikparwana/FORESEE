@@ -31,6 +31,10 @@ def step(state, action, params, dt): # 4 x 1 array
         theta_dot = theta_dot + dt * thetaacc
         
         return np.array([ x, x_dot, theta, theta_dot ]).reshape(-1,1)
+
+def step_using_xdot(state, state_dot, dt):
+     state_next = state + state_dot * dt
+     return np.array([ state_next[0,0], state_next[1,0], wrap_angle(state_next[2,0]), state_next[3,0] ]).reshape(-1,1)
     
 def state_dot( state, action, params ):
     x = state[0,0]
