@@ -16,3 +16,4 @@ leader_follower/ut_utils/__pycache__/
 utils/__pycache__/
 cartpole/gym_wrappers/monitoring/__pycache__/
 *.eps
+notebooks/.ipynb_checkpoints/
