@@ -113,7 +113,7 @@ get_future_reward_grad_jit = jit(get_future_reward_grad)
 
 # Set up environment
 env_to_render = CustomCartPoleEnv(render_mode="human")
-env = RecordVideo( env_to_render, video_folder="/home/dasc/hardik/videos/", name_prefix="cartpole_default_inverted" )
+env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_default_inverted" )
 observation, info = env.reset(seed=42)
 
 polemass_length, gravity, length, masspole, total_mass, tau = env.polemass_length, env.gravity, env.length, env.masspole, env.total_mass, env.tau

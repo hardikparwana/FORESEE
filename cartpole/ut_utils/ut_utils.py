@@ -32,10 +32,10 @@ def get_ut_cov_root_diagonal(cov):
     k = 0.5#-1
     n = cov.shape[0]
     offset = 0.001
-    root0 = 0#np.sqrt((n+k)*(offset+cov[0,0]))
-    root1 = 0#np.sqrt((n+k)*(offset+cov[1,1]))
-    root2 = 0#np.sqrt((n+k)*(offset+cov[2,2]))
-    root3 = 0#np.sqrt((n+k)*(offset+cov[3,3]))
+    root0 = np.sqrt((n+k)*(offset+cov[0,0]))
+    root1 = np.sqrt((n+k)*(offset+cov[1,1]))
+    root2 = np.sqrt((n+k)*(offset+cov[2,2]))
+    root3 = np.sqrt((n+k)*(offset+cov[3,3]))
     # return cov
     root_term = np.diag( np.array([root0, root1, root2, root3]) )
     return root_term
@@ -91,7 +91,7 @@ def sigma_point_expand(sigma_points, weights, control, dt_outer, dynamics_params
     root_term = get_ut_cov_root_diagonal(cov) 
     temp_points, temp_weights = generate_sigma_points( mu, root_term, sigma_points[:,0].reshape(-1,1), dt_outer )
     new_points = np.copy( temp_points )
-    new_weights = ( np.copy( temstep_using_xdotp_weights ) * weights[0,0]).reshape(1,-1)
+    new_weights = ( np.copy( temp_weights ) * weights[0,0]).reshape(1,-1)
         
     for i in range(1,N):
         mu, cov = get_state_dot_noisy(sigma_points[:,i].reshape(-1,1), control.reshape(-1,1), dynamics_params)
