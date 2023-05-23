@@ -26,16 +26,15 @@ from gym_wrappers.record_video import RecordVideo
 
 key = random.PRNGKey(2)
 
-def get_future_reward(X, horizon, dt_outer, dynamics_params, params_policy):
+def get_future_reward(X, horizon, dt_outer, dynamics_params, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
     states, weights = initialize_sigma_points(X)
     reward = 0
-    H = 100
+    H = 300
     def body(t, inputs):
         reward, states, weights = inputs
         mean_position = get_mean( states, weights )
         solution = policy( params_policy, mean_position )
-        # print(f"input: {solution}")
-        next_states_expanded, next_weights_expanded = sigma_point_expand( states, weights, solution, dt_outer, dynamics_params)#, gps )        
+        next_states_expanded, next_weights_expanded = sigma_point_expand_with_gp( states, weights, solution, dt_outer, dynamics_params, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y )        
         next_states, next_weights = sigma_point_compress( next_states_expanded, next_weights_expanded )
         states = next_states
         weights = next_weights
@@ -51,8 +50,8 @@ get_future_reward_grad_jit = jit(get_future_reward_grad)
 
 
 # Set up environment
-env_to_render = CustomCartPoleEnv(render_mode="human")
-env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/videos/", name_prefix="cartpole_rl_test" )
+env_to_render = CustomCartPoleEnv(render_mode="rgb_array")
+env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/videos/", name_prefix="cartpole_rl_test_full_2" )
 observation, info = env.reset(seed=42)
 
 polemass_length, gravity, length, masspole, total_mass, tau = env.polemass_length, env.gravity, env.length, env.masspole, env.total_mass, env.tau
@@ -76,6 +75,7 @@ dt_inner = 0.06
 dt_outer = 0.06
 tf = 1.0#6.0#0.06#8.0#4.0
 
+env.reset()
 state = np.copy(env.get_state())
 t0 = time.time()
 action = policy_jit( params_policy, state)
@@ -87,7 +87,7 @@ print(f"Policy JITed in time: {time.time()-t0}")
 
 # t0 = time.time()
 # get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
-# print(f"time jit for: {time.time()-t0}")
+# print(f"time to JIT prediction: {time.time()-t0}")
 
 # #train using scipy
 # t0 = time.time()
@@ -99,7 +99,6 @@ print(f"Policy JITed in time: {time.time()-t0}")
 
 # t0 = time.time()
 # res = minimize( get_future_reward_minimize_jit, params_policy, method='BFGS', tol=1e-8 )
-# params_policy = res.x
 # print(f"optimized policy in time: {time.time() - t0} ")
 # res = minimize_scipy( get_future_reward_minimize_jit, params_policy, method='Nelder-Mead', tol=1e-8 )
 # params_policy = res.x
@@ -124,7 +123,7 @@ print(f"Policy JITed in time: {time.time()-t0}")
 # exit()   
 
 # Training Procedure
-num_trials = 3
+num_trials = 2
 trial_horizon = 100
 
 likelihoods = [0]*4
@@ -177,14 +176,23 @@ for k in range(num_trials):
         ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r', label = 'True values')
         ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i] - 2* stds[i], mus[i] + 2* stds[i], alpha = 0.2, color="tab:blue", linewidth=1)
         ax[i].legend()
-    plt.show()
+    plt.savefig("plot_gp_iter_"+str(k)+".png")
     
     # Train policy
-    res = minimize( get_future_reward_minimize_jit, params_policy, method='BFGS', tol=1e-8 )
+    get_future_reward_minimize = lambda params: get_future_reward( state, H, dt_outer, dynamics_params, params, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[1:,:], train_y[1:,:] )
+    get_future_reward_minimize_jit = jit(get_future_reward_minimize)
+    
+    t0 = time.time()
+    get_future_reward_minimize_jit( params_policy )
+    print(f"time to JIT prediction: {time.time()-t0}")
+    
+    t0 = time.time()
+    res = minimize( get_future_reward_minimize_jit, params_policy, method='BFGS', tol=1e-3 )
+    print(f"time to Optimize policy: {time.time()-t0}")
     params_policy = res.x
     
     # Evaluate Policy
-    reward = get_future_reward_minimize_jit
+    reward = get_future_reward_minimize_jit( params_policy )
     print(f"reward is : {reward}")
 
 
