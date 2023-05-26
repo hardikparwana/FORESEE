@@ -162,7 +162,7 @@ def compute_reward( state ):
     pos = state[0,0]
     # return np.square(theta-0.0)
     # print(f"theta:{theta}")
-    return -10*np.cos(theta)+0.08*np.square(pos/2)#+0.001*np.square(speed)
+    return -10*np.cos(theta)#+0.08*np.square(pos/2)#+0.001*np.square(speed)
     # return -100*np.cos(theta)+0.1*np.square(speed)+10*np.square(pos)
     return - 100 * np.cos(theta) + 0.1 * np.square(pos)
 compute_reward_jit = jit(compute_reward)

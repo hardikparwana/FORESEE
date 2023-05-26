@@ -51,7 +51,9 @@ get_future_reward_grad_jit = jit(get_future_reward_grad)
 
 # Set up environment
 env_to_render = CustomCartPoleEnv(render_mode="rgb_array")
-env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/videos/", name_prefix="cartpole_rl_test_full_2" )
+# env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/videos/", name_prefix="cartpole_rl_test_full_2" )
+exp_name = "cartpole_rl_tf18_test1"
+env = RecordVideo( env_to_render, video_folder="/home/dasc/hardik/FORESEE/videos/", name_prefix=exp_name )
 observation, info = env.reset(seed=42)
 
 polemass_length, gravity, length, masspole, total_mass, tau = env.polemass_length, env.gravity, env.length, env.masspole, env.total_mass, env.tau
@@ -73,7 +75,7 @@ params_policy = np.append( np.append( param_w, param_mu.reshape(-1,1)[:,0] ), pa
 t = 0
 dt_inner = 0.06
 dt_outer = 0.06
-tf = 1.0#6.0#0.06#8.0#4.0
+tf = 18.0#6.0#0.06#8.0#4.0
 
 env.reset()
 state = np.copy(env.get_state())
@@ -123,7 +125,7 @@ print(f"Policy JITed in time: {time.time()-t0}")
 # exit()   
 
 # Training Procedure
-num_trials = 2
+num_trials = 5
 trial_horizon = 100
 
 likelihoods = [0]*4
@@ -176,7 +178,7 @@ for k in range(num_trials):
         ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r', label = 'True values')
         ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i] - 2* stds[i], mus[i] + 2* stds[i], alpha = 0.2, color="tab:blue", linewidth=1)
         ax[i].legend()
-    plt.savefig("plot_gp_iter_"+str(k)+".png")
+    plt.savefig(exp_name + "plot_gp_iter_"+str(k)+".png")
     
     # Train policy
     get_future_reward_minimize = lambda params: get_future_reward( state, H, dt_outer, dynamics_params, params, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[1:,:], train_y[1:,:] )

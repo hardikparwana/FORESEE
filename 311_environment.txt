@@ -4,3 +4,11 @@ pip install jax
 pip install notebook
 pip install matplotlib
 pygame moviepy gym-recording==0.0.1 gym==0.26.0
+
+gpjax==0.5.9 -- installed this last
+jaxkern (0.0.5)
+typing_extensions (0.4.6)
+optax (0.1.5)
+matplotlib 
+jaxlib (0.4.7)
+jax (0.4.10)
