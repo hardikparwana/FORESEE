@@ -31,7 +31,8 @@ def policy(params_policy, X):
         pi = pi + param_w[t] * phi
         return pi
     
-    return np.clip(lax.fori_loop( 0, N, body, pi ), -20, 20)[0,0]
+    # return np.clip(lax.fori_loop( 0, N, body, pi ), -20, 20)[0,0]
+    return np.clip(lax.fori_loop( 0, N, body, pi ), -5, 5)[0,0]
 
 policy_jit = jit(policy)
 policy_grad = grad(policy, 0)
