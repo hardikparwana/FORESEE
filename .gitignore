@@ -17,3 +17,4 @@ utils/__pycache__/
 cartpole/gym_wrappers/monitoring/__pycache__/
 *.eps
 notebooks/.ipynb_checkpoints/
+paper codes/pets-handful-of-trials/dmbrl/modeling/utils/__pycache__/*

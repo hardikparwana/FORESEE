@@ -21,7 +21,8 @@ from utils.utils import *
 from cartpole_policy_scan_sigma import policy, policy_jit, policy_grad
 from ut_utils.ut_utils import *
 from robot_models.custom_cartpole_constrained import CustomCartPoleEnv
-from robot_models.cartpole2D import step
+# from robot_models.cartpole2D import step
+from robot_models.cartpole2D_v2 import step
 from gym_wrappers.record_video import RecordVideo
 
 key = random.PRNGKey(2)
@@ -50,8 +51,10 @@ get_future_reward_grad_jit = jit(get_future_reward_grad)
 
 
 # Set up environment
-env_to_render = CustomCartPoleEnv(render_mode="rgb_array")
-env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/videos/", name_prefix="cartpole_rl_test_full_2" )
+env_to_render = CustomCartPoleEnv(render_mode="human")
+# env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/videos/", name_prefix="cartpole_rl_test_full_2" )
+exp_name = "cartpole_rl_tf10_test3"
+env = RecordVideo( env_to_render, video_folder="/home/dasc/hardik/FORESEE/videos/", name_prefix=exp_name )
 observation, info = env.reset(seed=42)
 
 polemass_length, gravity, length, masspole, total_mass, tau = env.polemass_length, env.gravity, env.length, env.masspole, env.total_mass, env.tau
@@ -66,14 +69,14 @@ key = random.PRNGKey(100)
 key, subkey = random.split(key)
 param_w = 1.0*(random.uniform(subkey, shape=(N,1))[:,0] - 0.5)#+ 0.5#+ 2.0  #0.5 work with Lr: 5.0
 key, subkey = random.split(key)
-param_mu = random.uniform(subkey, shape=(4,N))- 0.5 * np.ones((4,N)) #- 3.5 * np.ones((4,N))
+param_mu = random.uniform(subkey, shape=(n,N))- 0.5 * np.ones((n,N)) #- 3.5 * np.ones((4,N))
 param_Sigma = generate_psd_params(n,N) # 10,N
 params_policy = np.append( np.append( param_w, param_mu.reshape(-1,1)[:,0] ), param_Sigma.reshape(-1,1)[:,0]  )
 
 t = 0
 dt_inner = 0.06
 dt_outer = 0.06
-tf = 1.0#6.0#0.06#8.0#4.0
+tf = 10.0#6.0#0.06#8.0#4.0
 
 env.reset()
 state = np.copy(env.get_state())
@@ -123,7 +126,7 @@ print(f"Policy JITed in time: {time.time()-t0}")
 # exit()   
 
 # Training Procedure
-num_trials = 2
+num_trials = 5
 trial_horizon = 100
 
 likelihoods = [0]*4
@@ -153,8 +156,9 @@ for k in range(num_trials):
     t = 0
     while t < tf:
         action = policy_jit( params_policy, state ).reshape(-1,1)
+        print(f"action :{action}")
         key, subkey = jax.random.split(key)
-        jax.random.choice(subkey, np.array([10,-10]))
+        jax.random.choice(subkey, np.array([3,-3]))# 10, -10
         train_x = np.append( train_x, np.append(state.reshape(1,-1), action.reshape(1,-1), axis=1), axis=0 )
         next_state = step(state, action, dynamics_params, dt_inner)
         env.set_state( (next_state[0,0].item(), next_state[1,0].item(), next_state[2,0].item(), next_state[3,0].item()) )
@@ -176,7 +180,7 @@ for k in range(num_trials):
         ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r', label = 'True values')
         ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i] - 2* stds[i], mus[i] + 2* stds[i], alpha = 0.2, color="tab:blue", linewidth=1)
         ax[i].legend()
-    plt.savefig("plot_gp_iter_"+str(k)+".png")
+    plt.savefig(exp_name + "plot_gp_iter_"+str(k)+".png")
     
     # Train policy
     get_future_reward_minimize = lambda params: get_future_reward( state, H, dt_outer, dynamics_params, params, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[1:,:], train_y[1:,:] )

@@ -9,8 +9,9 @@ from jax import jit, random
 key = random.PRNGKey(2)
 
 def initialize_gp(num_datapoints = 10):
+    meanf = jgp.mean_functions.Zero()
     kernel = jk.RBF()
-    prior = jgp.Prior(kernel = kernel)
+    prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=num_datapoints )
     posterior = prior * likelihood
     parameter_state = jgp.initialise(
@@ -39,8 +40,9 @@ def predict_gp(likelihood, posterior, learned_params, D, test_x):
     return predictive_mean, predictive_std
 
 def predict_with_gp_params(gp_params, train_x, train_y, test_x):
+    meanf = jgp.mean_functions.Zero()
     kernel = jk.RBF()
-    prior = jgp.Prior(kernel = kernel)
+    prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=train_x.shape[0] )
     posterior = prior * likelihood
     D = Dataset(X=train_x, y=train_y)
