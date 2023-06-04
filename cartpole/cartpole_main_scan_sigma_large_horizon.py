@@ -18,6 +18,8 @@ from robot_models.custom_cartpole_constrained import CustomCartPoleEnv
 from robot_models.cartpole2D import step
 from gym_wrappers.record_video import RecordVideo
 
+import multiprocessing 
+
 key = random.PRNGKey(2)
 
 def generate_psd_params():
@@ -35,6 +37,15 @@ def generate_psd_params():
         params_temp = random.uniform( subkey, shape=( 1,int(n + (n**2 -n)/2.0)) )
         params = np.append( params, params_temp, axis = 0 )    
     return params
+
+def initialize_parameters(key):
+    key, subkey = random.split(key)
+    param_w = 1.0*(random.uniform(subkey, shape=(N,1))[:,0] - 0.5)#+ 0.5#+ 2.0  #0.5 work with Lr: 5.0
+    key, subkey = random.split(key)
+    param_mu = random.uniform(subkey, shape=(4,N))- 0.5 * np.ones((4,N)) #- 3.5 * np.ones((4,N))
+    param_Sigma = generate_psd_params() # 10,N
+    params_policy = np.append( np.append( param_w, param_mu.reshape(-1,1)[:,0] ), param_Sigma.reshape(-1,1)[:,0]  )
+    return params_policy, key
 
 def policy_next_state1( params_policy, mean_position, states, weights, dt_outer, dynamics_params ):
     solution = policy_jit( params_policy, mean_position ).reshape(-1,1)
@@ -60,7 +71,7 @@ policy_next_state3_grad = grad( policy_next_state3, 0 )
 def get_future_reward(X, horizon, dt_outer, dynamics_params, params_policy):
     states, weights = initialize_sigma_points(X)
     reward = 0
-    H = 10#80
+    H = 60
     def body(t, inputs):
         reward, states, weights = inputs
         mean_position = get_mean( states, weights )
@@ -74,35 +85,6 @@ def get_future_reward(X, horizon, dt_outer, dynamics_params, params_policy):
         return reward, states, weights
     
     return lax.fori_loop( 0, H, body, (reward, states, weights) )[0]
-
-    # for i in range(H):
-    #     mean_position = get_mean( states, weights )
-    #     solution = policy( params_policy, mean_position ).reshape(-1,1)
-    #     # print(f"input: {solution}")
-    #     next_states_expanded, next_weights_expanded = sigma_point_expand( states, weights, solution, dt_outer, dynamics_params)#, gps )        
-    #     next_states, next_weights = sigma_point_compress( next_states_expanded, next_weights_expanded )
-    #     states = next_states
-    #     weights = next_weights
-    #     reward = reward + reward_UT_Mean_Evaluator_basic( states, weights )
-
-    # mean_position = get_mean( states, weights )
-    # solution = policy( params_policy, mean_position ).reshape(-1,1)
-    # # print(f"input: {solution}")
-    # next_states_expanded, next_weights_expanded = sigma_point_expand( states, weights, solution, dt_outer, dynamics_params)#, gps )        
-    # next_states, next_weights = sigma_point_compress( next_states_expanded, next_weights_expanded )
-    # states = next_states
-    # weights = next_weights
-    # reward = reward + reward_UT_Mean_Evaluator_basic( states, weights )
-    # print(f" grad1:{np.max(policy_next_state1_grad(params_policy, mean_position, states, weights, dt_outer, dynamics_params))}, grad2:{np.max(policy_next_state2_grad(params_policy, mean_position, states, weights, dt_outer, dynamics_params))}, grad3:{np.max(policy_next_state3_grad(params_policy, mean_position, states, weights, dt_outer, dynamics_params))} ")
-    # mean_position2 = get_mean( states2, weights2)
-    # solution2 = policy( params_policy, mean_position2 ).reshape(-1,1)
-    # # print(f"input: {solution}")
-    # next_states_expanded2, next_weights_expanded2 = sigma_point_expand( states2, weights2, solution2, dt_outer, dynamics_params)#, gps )        
-    # next_states2, next_weights2 = sigma_point_compress( next_states_expanded2, next_weights_expanded2 )
-    # states3 = next_states2
-    # weights3 = next_weights2
-    # reward = reward + reward_UT_Mean_Evaluator_basic( states3, weights3 )
-    return reward
 
 # get_future_reward_grad = grad(get_future_reward)
 get_future_reward_jit = jit(get_future_reward)
@@ -123,21 +105,20 @@ dynamics_params = np.array([ polemass_length, gravity, length, masspole, total_m
 n = 4
 N = 50
 H = 20
-lr_rate = 1.0#0.5#1.0#0.1#1.0##0.01
-
+lr_rate = 0.05#1.0#0.5#1.0#0.1#1.0##0.01
 
 # 0.5 works for theta only reward function! 10 * np.square(theta)
 key = random.PRNGKey(100)
 key, subkey = random.split(key)
 param_w = 1.0*(random.uniform(subkey, shape=(N,1))[:,0] - 0.5)#+ 0.5#+ 2.0  #0.5 work with Lr: 5.0
 key, subkey = random.split(key)
-param_mu = random.uniform(subkey, shape=(4,N))- 0.5 * np.ones((4,N)) #- 3.5 * np.ones((4,N))
+param_mu = random.uniform(subkey, shape=(n,N))- 0.5 * np.ones((n,N)) #- 3.5 * np.ones((4,N))
 param_Sigma = generate_psd_params() # 10,N
 params_policy = np.append( np.append( param_w, param_mu.reshape(-1,1)[:,0] ), param_Sigma.reshape(-1,1)[:,0]  )
-
+num_params = params_policy.size
 t = 0
-dt_inner = 0.02
-dt_outer = 0.02
+dt_inner = 0.05#0.02#0.05
+dt_outer = 0.05#0.02#0.05
 tf = 4.0#6.0#0.06#8.0#4.0
 
 state = np.copy(env.get_state())
@@ -153,33 +134,11 @@ t0 = time.time()
 get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
 print(f"time jit for: {time.time()-t0}")
 
-#train using scipy
-# t0 = time.time()
-# get_future_reward_minimize = lambda params: get_future_reward( state, H, dt_outer, dynamics_params, params )
-# get_future_reward_minimize_jit = jit(get_future_reward_minimize)
-# get_future_reward_minimize_jit( params_policy )
-# print(f"time jit for: {time.time()-t0}")
-# res = minimize( get_future_reward_minimize_jit, params_policy, method='BFGS', tol=1e-6 )
-# params_policy = res.x
-
-# res = minimize_scipy( get_future_reward_minimize_jit, params_policy, method='Nelder-Mead', tol=1e-6 )
-# params_policy = res.x
-
-# train
-# for i in range(200):
-#     reward, param_policy_grad = get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
-#     param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
-
-#     params_policy = params_policy - lr_rate * param_policy_grad
-#     params_w_mu_temp = np.clip( params_policy[0:N*n+N], -10, 10  )
-#     params_sigma_temp = np.clip( params_policy[N*n+N:], -1, 1 )
-#     params_policy = np.append( params_w_mu_temp, params_sigma_temp )
-#     if i%1==0:
-#         print(f"i:{i}, reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}")
-
-optimize_offline = False
-use_scipy = True
+optimize_offline = True
+use_scipy = False
 use_custom_gd = True
+n_restarts = 10
+maxiter = 500000
 
 t0 = time.time()
 get_future_reward_minimize = lambda params: get_future_reward( state, H, dt_outer, dynamics_params, params )
@@ -187,37 +146,55 @@ get_future_reward_minimize_jit = jit(get_future_reward_minimize)
 reward = get_future_reward_minimize_jit( params_policy )
 print(f"time jit for: {time.time()-t0}")
 print(f"reward init:{ reward }")
+
 if (optimize_offline):
     #train using scipy ###########################
-    if use_scipy:
-        t0 = time.time()
-        res = minimize( get_future_reward_minimize_jit, params_policy, method='BFGS', tol=1e-8 ) #1e-8
-        # params_policy = res.x
-        print(f"time minimize for: {time.time()-t0}")
-        print(f"reward final scipy : { get_future_reward_minimize_jit( res.x ) }")
 
     if use_custom_gd:
-        for i in range(100):
-            param_policy_grad = get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
+        for i in range(100000):
+            reward, param_policy_grad = get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
             param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
             params_policy = params_policy - lr_rate * param_policy_grad
             params_policy =  np.clip( params_policy, -10, 10 )
         print(f"reward final GD : { get_future_reward_minimize_jit( params_policy ) }")
+
+    if use_scipy:
+        best_reward = 10000000000
+        for i in range(n_restarts):
+            params_policy_temp, key = initialize_parameters(key)
+            print(f"reward init scipy : { get_future_reward_minimize_jit( params_policy_temp ) }")
+            t0 = time.time()
+            res = minimize( get_future_reward_minimize_jit, params_policy_temp, method='BFGS', tol=1e-8, options=dict(maxiter=maxiter) ) #1e-8
+            # res = minimize_scipy( get_future_reward_minimize_jit, params_policy, method='Nelder-Mead', tol=1e-6 )
+            print(f"time minimize for: {time.time()-t0}")
+            reward = get_future_reward_minimize_jit( res.x )
+            print(f"reward final scipy : { reward }")
+            if (reward < best_reward):
+                params_policy = res.x
+                reward = best_reward
+        with open('result_opt_2.npy', 'wb') as f:
+            np.save(f, params_policy)
     ##################################
 # exit()
 
-
+input("Press Enter to continue...")
 while t < tf:
 
     if not optimize_offline:
         # tune parameters
         reward, param_policy_grad = get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
-        print(f"reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}")
+        print(f"reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}, action:{action}")
         param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
         params_policy = params_policy - lr_rate * param_policy_grad
-        params_w_mu_temp = np.clip( params_policy[0:N*n+N], -10, 10  )
-        params_sigma_temp = np.clip( params_policy[N*n+N:], -1, 1 )
-        params_policy = np.append( params_w_mu_temp, params_sigma_temp )
+
+        # these 3 lines not needed apparently for short time horizons
+        # params_w_mu_temp = np.clip( params_policy[0:N*n+N], -10, 10  )
+        # params_sigma_temp = np.clip( params_policy[N*n+N:], -1, 1 )
+        # params_policy = np.append( params_w_mu_temp, params_sigma_temp )
+
+        # print(f"hello")
+        # res = minimize( get_future_reward_jit, params_policy, method='BFGS', tol=1e-8, options=dict(maxiter=maxiter) ) #1e-8
+        # params_policy = res.x
 
     # params_w_mu_temp = np.clip( params_policy[0:N*n+N], -100, 100  )
     # params_sigma_temp = np.clip( params_policy[N*n+N:N*n+N+4], 1, 3 )
@@ -237,3 +214,5 @@ while t < tf:
     state = np.copy(next_state)
     t = t + dt_inner
 env.close()
+
+

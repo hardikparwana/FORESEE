@@ -256,14 +256,14 @@ class MC_PILCO(torch.nn.Module):
 
             print('MSE gp'+str(gp_index)+': ',
                   ((gp_outputs_target_list[gp_index]-gp_output_mean_list[gp_index])**2).mean())
-        #     # uncomment to plot model learning performance
-        #     plt.figure()
-        #     plt.plot(gp_outputs_target_list[gp_index], label = 'y '+str(gp_index))
-        #     plt.plot(gp_output_mean_list[gp_index], label = 'y '+str(gp_index)+' hat')
-        #     plt.grid()
-        #     plt.legend()
-        #     # plt.savefig('results_tmp/'+'gp'+str(gp_index)+'_trial'+str(data_collection_index)+'.pdf')
-        #     # plt.close()
+            # uncomment to plot model learning performance
+            plt.figure()
+            plt.plot(gp_outputs_target_list[gp_index], label = 'y '+str(gp_index))
+            plt.plot(gp_output_mean_list[gp_index], label = 'y '+str(gp_index)+' hat')
+            plt.grid()
+            plt.legend()
+            plt.savefig('results_tmp/'+'gp'+str(gp_index)+'_trial'+str(data_collection_index)+'.pdf')
+            plt.close()
         # plt.show()
 
         return gp_inputs, gp_outputs_target_list, gp_output_mean_list, gp_output_var_list
@@ -280,15 +280,15 @@ class MC_PILCO(torch.nn.Module):
         for state_dim_index in range(self.state_dim):
             print('MSE Rollout dim'+ str(state_dim_index) + ': ',
                   ((self.state_samples_history[data_collection_index][:,state_dim_index]-rollout_states[:,state_dim_index])**2).mean())
-        #     # uncomment to plot rollout performance
-        #     plt.figure()
-        #     plt.plot(rollout_states[:,state_dim_index],'r', label = 'predicted rollout dim '+str(state_dim_index))
-        #     plt.plot(self.state_samples_history[data_collection_index][:,state_dim_index], label = 'true rollout '+str(state_dim_index))
-        #     plt.grid()
-        #     plt.legend()
-        #     plt.grid()
-        #     # plt.savefig('results_tmp/'+'dim'+str(state_dim_index)+'_trial'+str(data_collection_index)+'_'+add_name+'.pdf')
-        #     # plt.close()
+            # uncomment to plot rollout performance
+            plt.figure()
+            plt.plot(rollout_states[:,state_dim_index],'r', label = 'predicted rollout dim '+str(state_dim_index))
+            plt.plot(self.state_samples_history[data_collection_index][:,state_dim_index], label = 'true rollout '+str(state_dim_index))
+            plt.grid()
+            plt.legend()
+            plt.grid()
+            plt.savefig('results_tmp/'+'dim'+str(state_dim_index)+'_trial'+str(data_collection_index)+'_'+add_name+'.pdf')
+            plt.close()
         # plt.show()
 
         return rollout_states, self.state_samples_history[data_collection_index], self.input_samples_history[data_collection_index]
@@ -337,6 +337,8 @@ class MC_PILCO(torch.nn.Module):
 
         # init cost variables
         control_horizon = int(T_control/self.T_sampling)
+        # print(f"control horizon: {control_horizon}")
+        # exit()
         num_opt_steps = opt_steps_list[trial_index]
         cost_list = torch.zeros(num_opt_steps,device = self.device, dtype = self.dtype)
         std_cost_list = torch.zeros(num_opt_steps,device = self.device, dtype = self.dtype)
@@ -417,6 +419,7 @@ class MC_PILCO(torch.nn.Module):
                                                                      p_dropout = p_dropout_applied)
                 # compute the expected cost
                 cost, std_cost = self.cost_function(states_sequence, inputs_sequence, trial_index)
+                # print(f" MAIN cost:{cost}, std_cost :{std_cost} ")
                 if torch.isnan(cost):
                     num_attempts += 1
                     print('\nCost is NaN: try sampling again')

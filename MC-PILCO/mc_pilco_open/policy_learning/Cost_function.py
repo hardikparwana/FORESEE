@@ -153,7 +153,9 @@ def cart_pole_cost(states_sequence, inputs_sequence, trial_index, target_state, 
 
     target_x = target_state[1]
     target_theta = target_state[0]
-
+    cost = (1-torch.exp(-((torch.abs(theta)-target_theta)/lengthscales[0])**2-((x-target_x)/lengthscales[1])**2))
+    # print(f"reward: { cost }, sum:{torch.sum(cost)}, shape:{cost.shape}, {states_sequence.shape}")
+    # exit()
     return (1-torch.exp(-((torch.abs(theta)-target_theta)/lengthscales[0])**2-((x-target_x)/lengthscales[1])**2))
 
 

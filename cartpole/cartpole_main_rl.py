@@ -27,10 +27,11 @@ from gym_wrappers.record_video import RecordVideo
 
 key = random.PRNGKey(2)
 
-def get_future_reward(X, horizon, dt_outer, dynamics_params, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
+def get_future_reward(X, horizon, dynamics_params, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
     states, weights = initialize_sigma_points(X)
     reward = 0
     H = 300
+    H = int(tf/dt_inner)
     def body(t, inputs):
         reward, states, weights = inputs
         mean_position = get_mean( states, weights )
@@ -138,10 +139,6 @@ mus = [0]*4
 stds = [0]*4
     
 n = int(tf/dt_inner)
-likelihoods[0], posteriors[0], parameter_states[0] = initialize_gp(num_datapoints = n)    
-likelihoods[1], posteriors[1], parameter_states[1] = initialize_gp(num_datapoints = n) 
-likelihoods[2], posteriors[2], parameter_states[2] = initialize_gp(num_datapoints = n) 
-likelihoods[3], posteriors[3], parameter_states[3] = initialize_gp(num_datapoints = n) 
 
 train_x = np.append(np.copy(state).reshape(1,-1), action.reshape(1,-1), axis=1)
 train_y = np.copy(state).reshape(1,-1)
@@ -169,6 +166,7 @@ for k in range(num_trials):
               
     # Learn GP
     for i in range(4):
+        likelihoods[i], posteriors[i], parameter_states[i] = initialize_gp(num_datapoints = train_x.shape[0]) 
         likelihoods[i], posteriors[i], learned_params[i], Ds[i] = train_gp( likelihoods[i], posteriors[i], parameter_states[i], train_x[1:,:], train_y[1:,i].reshape(-1,1) )      
     
     # Evaluate GPS
@@ -183,7 +181,7 @@ for k in range(num_trials):
     plt.savefig(exp_name + "plot_gp_iter_"+str(k)+".png")
     
     # Train policy
-    get_future_reward_minimize = lambda params: get_future_reward( state, H, dt_outer, dynamics_params, params, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[1:,:], train_y[1:,:] )
+    get_future_reward_minimize = lambda params: get_future_reward( state, H, dynamics_params, params, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[1:,:], train_y[1:,:] )
     get_future_reward_minimize_jit = jit(get_future_reward_minimize)
     
     t0 = time.time()

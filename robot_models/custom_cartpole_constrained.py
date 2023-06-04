@@ -217,8 +217,9 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             options,  -1.0, 1.0  # default low #-1.0, 1.0 #
         )  # default high
         self.state = self.np_random.uniform(low=low, high=high, size=(4,))
-        self.state[2] = np.pi 
+        self.state[2] = np.pi/12 # 0 #np.pi 
         self.state[0] = 0.0 #- self.x_threshold + 0.2
+        self.state[1] = 0.0
         self.steps_beyond_terminated = None
 
         if self.render_mode == "human":
@@ -264,7 +265,12 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         l, r, t, b = -cartwidth / 2, cartwidth / 2, cartheight / 2, -cartheight / 2
         axleoffset = cartheight / 4.0
-        cartx = x[0] * scale + self.screen_width / 2.0  # MIDDLE OF CART
+        
+        # cartx = x[0] * scale + self.screen_width / 2.0 # MIDDLE OF CART
+
+        x_temp = x[0] - int( x[0] / self.x_threshold ) * self.x_threshold
+        cartx = x_temp * scale + self.screen_width / 2.0 # MIDDLE OF CART
+
         carty = 100  # TOP OF CART
         cart_coords = [(l, b), (l, t), (r, t), (r, b)]
         cart_coords = [(c[0] + cartx, c[1] + carty) for c in cart_coords]

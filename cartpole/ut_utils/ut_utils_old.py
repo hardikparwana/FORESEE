@@ -1,7 +1,6 @@
 import jax.numpy as np
 from jax import jit, lax
 from robot_models.cartpole2D import get_state_dot_noisy, step_using_xdot
-from gp_utils import predict_with_gp_params
 
 def get_mean( sigma_points, weights ):
     weighted_points = sigma_points * weights[0]
@@ -30,15 +29,16 @@ get_mean_cov_jit = jit(get_mean_cov)
 # get_ut_cov_root_jit = jit(get_ut_cov_root)
 
 def get_ut_cov_root_diagonal(cov):
-    k = 0.5#-1
-    n = cov.shape[0]
-    offset = 0.001
-    root0 = np.sqrt((n+k)*(offset+cov[0,0]))
-    root1 = np.sqrt((n+k)*(offset+cov[1,1]))
-    root2 = np.sqrt((n+k)*(offset+cov[2,2]))
-    root3 = np.sqrt((n+k)*(offset+cov[3,3]))
-    # return cov
-    root_term = np.diag( np.array([root0, root1, root2, root3]) )
+    # k = 0.5#-1
+    # n = cov.shape[0]
+    # offset = 0.001
+    # root0 = np.sqrt((n+k)*(offset+cov[0,0]))
+    # root1 = np.sqrt((n+k)*(offset+cov[1,1]))
+    # root2 = np.sqrt((n+k)*(offset+cov[2,2]))
+    # root3 = np.sqrt((n+k)*(offset+cov[3,3]))
+    # # return cov
+    # root_term = np.diag( np.array([root0, root1, root2, root3]) )
+    root_term = np.zeros((4,4))
     return root_term
 get_ut_cov_root_diagonal_jit = jit(get_ut_cov_root_diagonal)
 
@@ -58,8 +58,8 @@ def generate_sigma_points( mu, cov_root, base_term, factor ):
 
     # TODO
     k = 0.5 # n-3 # 0.5**
-    # new_points = base_term + factor * mu
-    new_points = step_using_xdot(base_term, mu, factor)
+
+    new_points = base_term + factor * mu
     new_weights = np.array([[1.0*k/(n+k)]])
     for i in range(n):
         # new_points = np.append( new_points, base_term + factor * (mu - cov_root[:,i].reshape(-1,1)) , axis = 1 )
@@ -83,10 +83,10 @@ generate_sigma_points_jit = jit(generate_sigma_points)
 generate_sigma_points_sum = lambda a,b,c,d : np.sum(generate_sigma_points(a,b,c,d)[0])
 
 # def sigma_point_expand_JIT(GA, PE, gp_params, K_invs, noise, X_s, Y_s, sigma_points, weights, control, dt_outer, dt_inner, polemass_length, gravity, length, masspole, total_mass, tau):#, gps):
-def sigma_point_expand(sigma_points, weights, control, dt_outer, dynamics_params, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
+def sigma_point_expand(sigma_points, weights, control, dt_outer, dynamics_params):#, gps):
    
     n, N = sigma_points.shape   
-    # dt_outer = 0  
+      
     #TODO  
     mu, cov = get_state_dot_noisy(sigma_points[:,0].reshape(-1,1), control.reshape(-1,1), dynamics_params)
     root_term = get_ut_cov_root_diagonal(cov) 
@@ -105,37 +105,6 @@ def sigma_point_expand(sigma_points, weights, control, dt_outer, dynamics_params
 sigma_point_expand_jit = jit(sigma_point_expand)
 sigma_point_expand_sum = lambda a,b,c,d,e: np.sum(sigma_point_expand(a,b,c,d,e)[0])
 
-def get_state_dot_with_gp(state, control, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
-    test_x = np.append(state.reshape(1,-1), control.reshape(1,-1), axis=1)
-    mu1, var1 = predict_with_gp_params(gp_params1, gp_train_x, gp_train_y[:,0].reshape(-1,1), test_x)
-    mu2, var2 = predict_with_gp_params(gp_params2, gp_train_x, gp_train_y[:,1].reshape(-1,1), test_x)
-    mu3, var3 = predict_with_gp_params(gp_params3, gp_train_x, gp_train_y[:,2].reshape(-1,1), test_x)
-    mu4, var4 = predict_with_gp_params(gp_params4, gp_train_x, gp_train_y[:,3].reshape(-1,1), test_x)
-    return np.concatenate((mu1, mu2, mu3, mu4)).reshape(-1,1), np.diag( np.concatenate( (var1, var2, var3, var4) ) )
-
-
-# def sigma_point_expand_JIT(GA, PE, gp_params, K_invs, noise, X_s, Y_s, sigma_points, weights, control, dt_outer, dt_inner, polemass_length, gravity, length, masspole, total_mass, tau):#, gps):
-def sigma_point_expand_with_gp(sigma_points, weights, control, dynamics_params, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
-   
-    n, N = sigma_points.shape   
-    # dt_outer = 0  
-    #TODO  
-    mu, cov = get_state_dot_with_gp(sigma_points[:,0].reshape(-1,1), control.reshape(-1,1), gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
-    root_term = get_ut_cov_root_diagonal(cov) 
-    temp_points, temp_weights = generate_sigma_points( mu, root_term, sigma_points[:,0].reshape(-1,1), 1.0 )
-    new_points = np.copy( temp_points )
-    new_weights = ( np.copy( temp_weights ) * weights[0,0]).reshape(1,-1)
-        
-    for i in range(1,N):
-        mu, cov = get_state_dot_with_gp(sigma_points[:,i].reshape(-1,1), control.reshape(-1,1), gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
-        root_term = get_ut_cov_root_diagonal(cov)           
-        temp_points, temp_weights = generate_sigma_points( mu, root_term, sigma_points[:,i].reshape(-1,1), 1.0 )
-        new_points = np.append(new_points, temp_points, axis=1 )
-        new_weights = np.append( new_weights, (temp_weights * weights[0,i]).reshape(1,-1) , axis=1 )
-
-    return new_points, new_weights
-sigma_point_expand_with_gp_jit = jit(sigma_point_expand_with_gp)
-
 def sigma_point_compress( sigma_points, weights ):
     mu, cov = get_mean_cov( sigma_points, weights )
     cov_root_term = get_ut_cov_root_diagonal( cov )  
@@ -147,9 +116,9 @@ sigma_point_compress_sum = lambda a,b: np.sum(sigma_point_compress(a,b)[0])
 def reward_UT_Mean_Evaluator_basic(sigma_points, weights):
     # return np.sum(sigma_points)
     mu = 0
-    mu = mu + compute_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
+    mu = mu + mc_pilco_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
     for i in range(1, sigma_points.shape[1]):
-        mu = mu + compute_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
+        mu = mu + mc_pilco_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
     return mu
 reward_UT_Mean_Evaluator_basic_jit = jit(reward_UT_Mean_Evaluator_basic)
 reward_UT_Mean_Evaluator_basic_sum = lambda a,b: np.sum(reward_UT_Mean_Evaluator_basic(a,b)[0])
@@ -161,8 +130,20 @@ def compute_reward( state ):
     speed = state[1,0]
     pos = state[0,0]
     # return np.square(theta-0.0)
-    # print(f"theta:{theta}")
-    return -10*np.cos(theta)#+0.08*np.square(pos/2)#+0.001*np.square(speed)
-    # return -100*np.cos(theta)+0.1*np.square(speed)+10*np.square(pos)
+    # return 10 * np.square(theta)
+    # return -100*np.cos(theta)+0.1*np.square(speed)
     return - 100 * np.cos(theta) + 0.1 * np.square(pos)
 compute_reward_jit = jit(compute_reward)
+
+def mc_pilco_reward(state):
+    """ 
+    Cost function given by the combination of the saturated distance between |theta| and 'target angle', and between x and 'target position'.
+    """   
+    x = state[0,0]#states_sequence[:,:,pos_index]
+    theta = state[2,0]#states_sequence[:,:,angle_index]
+    lengthscales = [3.0, 1.0] # theta, p
+
+    target_x = 0#target_state[1]
+    target_theta = 0#np.pi#  target_state[0]
+
+    return (1-np.exp( -( (np.abs(theta)-target_theta) / lengthscales[0] )**2 - ( (x-target_x)/lengthscales[1] )**2 ) )

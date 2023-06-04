@@ -1,3 +1,5 @@
+# Use this file for Ideal scenario: when uncertain dynamics is directly passed on to jax
+# export PYDEVD_WARN_EVALUATION_TIMEOUT=100 to increase timeout with vscode debugger
 import time
 import jax.numpy as np
 from jax import random, grad, jit, vmap, vjp, lax
@@ -7,10 +9,11 @@ jax.config.update("jax_enable_x64", True)
 import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 plt.rcParams.update({'font.size': 10})
+from jax.scipy.optimize import minimize
 
 from utils.utils import *
 from cartpole_policy_scan import policy, policy_jit
-from ut_utils.ut_utils import *
+from ut_utils.ut_utils_old import *
 from robot_models.custom_cartpole_constrained import CustomCartPoleEnv
 from robot_models.cartpole2D import step
 from gym_wrappers.record_video import RecordVideo
@@ -51,7 +54,7 @@ def generate_psd_matrix_inverse(n, N):
 def get_future_reward(X, horizon, dt_outer, dynamics_params, params_policy, Sigma_invs):
     states, weights = initialize_sigma_points_jit(X)
     reward = 0
-    H = 20#400
+    H = 200#20#400
     def body(t, inputs):
         reward, states, weights = inputs
         mean_position = get_mean_jit( states, weights )
@@ -84,7 +87,7 @@ get_future_reward_grad_jit = jit(get_future_reward_grad)
 
 # Set up environment
 env_to_render = CustomCartPoleEnv(render_mode="human")
-env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/", name_prefix="cartpole_constrained_H20" )
+env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/", name_prefix="cartpole_test_ideal" )
 observation, info = env.reset(seed=42)
 
 polemass_length, gravity, length, masspole, total_mass, tau = env.polemass_length, env.gravity, env.length, env.masspole, env.total_mass, env.tau
@@ -121,23 +124,51 @@ get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy, 
 print(f"time jit for: {time.time()-t0}")
 # exit()
 
+optimize_offline = False
+use_scipy = True
+use_custom_gd = True
+
+t0 = time.time()
+get_future_reward_minimize = lambda params: get_future_reward( state, H, dt_outer, dynamics_params, params, Sigma_invs )
+get_future_reward_minimize_jit = jit(get_future_reward_minimize)
+reward = get_future_reward_minimize_jit( params_policy )
+print(f"time jit for: {time.time()-t0}")
+print(f"reward init:{ reward }")
+if (optimize_offline):
+    #train using scipy ###########################
+    if use_scipy:
+        t0 = time.time()
+        res = minimize( get_future_reward_minimize_jit, params_policy, method='BFGS', tol=1e-8 ) #1e-8
+        # params_policy = res.x
+        print(f"time minimize for: {time.time()-t0}")
+        print(f"reward final scipy : { get_future_reward_minimize_jit( res.x ) }")
+
+    if use_custom_gd:
+        for i in range(100):
+            param_policy_grad = get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy, Sigma_invs)
+            param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
+            params_policy = params_policy - lr_rate * param_policy_grad
+            params_policy =  np.clip( params_policy, -10, 10 )
+        print(f"reward final GD : { get_future_reward_minimize_jit( params_policy ) }")
+    ##################################
+# exit()
+
 while t < tf:
     
     action = policy_jit( params_policy, Sigma_invs, state )
     next_state = step(state, action, dynamics_params, dt_inner)
     t0 = time.time()
     
-    # reward = get_future_reward_jit( state, H, dt_inner, dynamics_params, param_w, param_mu, param_Sigma )
+    reward = get_future_reward_minimize_jit( params_policy )
     # w_grad, mu_grad, Sigma_grad = unconstrained_update(reward)
     
     param_policy_grad = get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy, Sigma_invs)
-    print(f"time reward :{ time.time()-t0 }, grad:{np.max(np.abs(param_policy_grad))}")#, reward: {reward}")
-    param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
-    params_policy = params_policy - lr_rate * param_policy_grad
-    params_policy =  np.clip( params_policy, -10, 10 )
+    print(f"time reward :{ time.time()-t0 }, grad:{np.max(np.abs(param_policy_grad))}, reward: {reward}")
+    if not optimize_offline:
+        param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
+        params_policy = params_policy - lr_rate * param_policy_grad
+        params_policy =  np.clip( params_policy, -10, 10 )
    
-    
-    
     env.set_state( (next_state[0,0].item(), next_state[1,0].item(), next_state[2,0].item(), next_state[3,0].item()) )
     env.render()  
     

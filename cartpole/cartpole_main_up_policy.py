@@ -9,7 +9,7 @@ plt.rcParams.update({'font.size': 10})
 
 from utils.utils import *
 from cartpole_policy_up import policy, policy_jit
-from ut_utils.ut_utils import *
+from ut_utils.ut_utils_old import *
 from robot_models.custom_cartpole_constrained import CustomCartPoleEnv
 from robot_models.cartpole2D import step
 from gym_wrappers.record_video import RecordVideo
@@ -71,7 +71,7 @@ get_future_reward_grad_jit = jit(get_future_reward_grad)
 
 # Set up environment
 env_to_render = CustomCartPoleEnv(render_mode="human")
-env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/", name_prefix="cartpole_constrained_H20" )
+env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/", name_prefix="cartpole_test_ideal" )
 observation, info = env.reset(seed=42)
 
 polemass_length, gravity, length, masspole, total_mass, tau = env.polemass_length, env.gravity, env.length, env.masspole, env.total_mass, env.tau

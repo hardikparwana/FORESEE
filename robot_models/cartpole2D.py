@@ -63,8 +63,9 @@ def state_dot( state, action, params ):
     
 def get_state_dot_noisy(state, action, params):
     X_dot = state_dot(state, action, params)
-    error_square = 0.01 + np.square(X_dot) # /2  #never let it be 0!!!!
-    cov = np.diag( error_square[:,0] )
-    X_dot = X_dot + X_dot/2 #X_dot = X_dot + X_dot/6
-    return X_dot, cov
+    # error_square = 0.01 + np.square(X_dot) # /2  #never let it be 0!!!!
+    # cov = np.diag( error_square[:,0] )
+    # X_dot = X_dot + X_dot/2 #X_dot = X_dot + X_dot/6
+    # return X_dot, cov
+    return X_dot, np.zeros((4,4))
 
