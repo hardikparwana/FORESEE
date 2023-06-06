@@ -165,6 +165,9 @@ class HorizonReward(torch.nn.Module):
     
     def get_parameters(self):
         return self.param.detach().numpy()
+    
+    def set_parameters(self, new_param):
+        self.param = new_param
 
 
 if (optimize_offline):
@@ -180,33 +183,23 @@ if (optimize_offline):
 
     if use_torch:
         model = HorizonReward(num_params)
-        best_params = np.copy(model.get_parameters())
-        best_cost = np.copy(model().detach().numpy())
-
+        # best_params = np.copy(model.get_parameters())
+        # best_cost = np.copy(model().detach().numpy())
         if use_adam:
-            for i in range(n_restarts):
-                model = HorizonReward(num_params)
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=0.0001)
+            for i in range(50000):
                 cost = model()
-                print(f"run: {i}, cost initial:{ cost }")
-                optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=0.0001)
-                for i in range(10):#range(50000):
-                    cost = model()
-                    if (cost.detach().numpy()<best_cost):
-                        print(f"cost:{cost.detach().numpy()}, prev;{best_cost}")
-                        best_cost = cost.detach().numpy()
-                        best_params = np.copy(model.get_parameters())
-                    optimizer.zero_grad()
-                    cost.backward(retain_graph = False)
-                    optimizer.step()
-                    # if i%100==0:
-                    #     print(f"i:{i}, cost:{cost}")
-                    # params_policy = model.get_parameters()
-                print(f"run: {i}, cost final:{get_future_reward_minimize_jit( best_params )}")
-            params_policy = best_params
-                
-            with open('adam_1_test.npy', 'wb') as f:
-                np.save(f, best_params)    
-                
+                optimizer.zero_grad()
+                cost.backward(retain_graph = False)
+                optimizer.step()
+                if i%100==0:
+                    print(f"i:{i}, cost:{cost}")
+                # if (cost.detach().numpy())<best_cost:
+                #     best_cost = cost.detach().numpy()
+                #     best_params = model.get_parameters()
+
+            params_policy = model.get_parameters()    
+            print(f"reward final torch : { get_future_reward_minimize_jit( params_policy ) }")
         else:
             print(f"Using LBFGS")
             optimizer = torch.optim.LBFGS(model.parameters())#, lr=0.005,  history_size=10, max_iter=10)

@@ -1,6 +1,6 @@
 import time
 import jax.numpy as np
-from jax import random, grad, jit, vmap, vjp, lax, value_and_grad
+from jax import random, grad, hessian, jit, vmap, vjp, lax, value_and_grad
 from jax import jacfwd, jacrev
 import jax
 import scipy
@@ -60,7 +60,7 @@ policy_next_state3_grad = grad( policy_next_state3, 0 )
 def get_future_reward(X, horizon, dt_outer, dynamics_params, params_policy):
     states, weights = initialize_sigma_points(X)
     reward = 0
-    H = 10#80
+    H = 80
     def body(t, inputs):
         reward, states, weights = inputs
         mean_position = get_mean( states, weights )
@@ -110,7 +110,6 @@ get_future_reward_jit = jit(get_future_reward)
 get_future_reward_grad = value_and_grad(get_future_reward, 4)
 get_future_reward_grad_jit = jit(get_future_reward_grad)
 
-
 # Set up environment
 env_to_render = CustomCartPoleEnv(render_mode="human")
 env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_sigma_test_ideal" )
@@ -136,8 +135,8 @@ param_Sigma = generate_psd_params() # 10,N
 params_policy = np.append( np.append( param_w, param_mu.reshape(-1,1)[:,0] ), param_Sigma.reshape(-1,1)[:,0]  )
 
 t = 0
-dt_inner = 0.02
-dt_outer = 0.02
+dt_inner = 0.05
+dt_outer = 0.05
 tf = 4.0#6.0#0.06#8.0#4.0
 
 state = np.copy(env.get_state())
@@ -177,7 +176,7 @@ print(f"time jit for: {time.time()-t0}")
 #     if i%1==0:
 #         print(f"i:{i}, reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}")
 
-optimize_offline = False
+optimize_offline = True
 use_scipy = True
 use_custom_gd = True
 
@@ -185,20 +184,31 @@ t0 = time.time()
 get_future_reward_minimize = lambda params: get_future_reward( state, H, dt_outer, dynamics_params, params )
 get_future_reward_minimize_jit = jit(get_future_reward_minimize)
 reward = get_future_reward_minimize_jit( params_policy )
+
+get_future_reward_minimize_grad = grad( get_future_reward_minimize )
+get_future_reward_minimize_grad_jit = jit( get_future_reward_minimize_grad )
+get_future_reward_minimize_grad_jit( params_policy )
+
+get_future_reward_minimize_hessian = hessian( get_future_reward_minimize )
+get_future_reward_minimize_hessian_jit = jit( get_future_reward_minimize_grad )
+get_future_reward_minimize_hessian_jit( params_policy )
+
 print(f"time jit for: {time.time()-t0}")
 print(f"reward init:{ reward }")
 if (optimize_offline):
     #train using scipy ###########################
     if use_scipy:
         t0 = time.time()
-        res = minimize( get_future_reward_minimize_jit, params_policy, method='BFGS', tol=1e-8 ) #1e-8
+        # res = minimize( get_future_reward_minimize_jit, params_policy, method='BFGS', tol=1e-8 ) #1e-8
+        res = minimize_scipy( get_future_reward_minimize_jit, params_policy, jac = get_future_reward_minimize_grad_jit, hess = get_future_reward_minimize_hessian_jit, method='Newton-CG', tol=1e-8 ) #1e-8
+        # res = minimize_scipy( get_future_reward_minimize_jit, params_policy, jac = get_future_reward_minimize_grad_jit, method='SLSQP', tol=1e-8 ) #1e-8
         # params_policy = res.x
         print(f"time minimize for: {time.time()-t0}")
         print(f"reward final scipy : { get_future_reward_minimize_jit( res.x ) }")
 
     if use_custom_gd:
         for i in range(100):
-            param_policy_grad = get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
+            reward, param_policy_grad = get_future_reward_grad_jit( state, H, dt_outer, dynamics_params, params_policy)
             param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
             params_policy = params_policy - lr_rate * param_policy_grad
             params_policy =  np.clip( params_policy, -10, 10 )
@@ -206,7 +216,7 @@ if (optimize_offline):
     ##################################
 # exit()
 
-
+input("Press Enter to continue...")
 while t < tf:
 
     if not optimize_offline:
