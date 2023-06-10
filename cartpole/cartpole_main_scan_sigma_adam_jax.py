@@ -18,8 +18,8 @@ from robot_models.custom_cartpole_constrained import CustomCartPoleEnv
 from robot_models.cartpole2D import step
 from gym_wrappers.record_video import RecordVideo
 
-import torch
-from jax2torch import jax2torch
+import optax
+import functools
 
 import multiprocessing 
 
@@ -74,7 +74,7 @@ policy_next_state3_grad = grad( policy_next_state3, 0 )
 def get_future_reward(X, horizon, dt_outer, dynamics_params, params_policy):
     states, weights = initialize_sigma_points(X)
     reward = 0
-    H = 60
+    H = 20#60
     def body(t, inputs):
         reward, states, weights = inputs
         mean_position = get_mean( states, weights )
@@ -121,9 +121,10 @@ params_policy = np.append( np.append( param_w, param_mu.reshape(-1,1)[:,0] ), pa
 
 
 t = 0
+H = 20
 dt_inner = 0.05#0.02#0.05
 dt_outer = 0.05#0.02#0.05
-tf = 3.0#6.0#0.06#8.0#4.0
+tf = dt_inner * H #3.0#6.0#0.06#8.0#4.0
 
 state = np.copy(env.get_state())
 t0 = time.time()
@@ -142,30 +143,17 @@ optimize_offline = True
 use_adam = True
 use_torch = True
 use_custom_gd = False
-n_restarts = 100
+n_restarts = 20#100
 maxiter = 500000
 
 t0 = time.time()
 get_future_reward_minimize = lambda params: get_future_reward( state, H, dt_outer, dynamics_params, params )
 get_future_reward_minimize_jit = jit(get_future_reward_minimize)
 reward = get_future_reward_minimize_jit( params_policy )
+get_future_reward_minimize_grad_jit = jit( grad( get_future_reward_minimize ) )
+get_future_reward_minimize_grad_jit( params_policy )
 print(f"time jit for: {time.time()-t0}")
 print(f"reward init:{ reward }")
-
-torch_get_future_reward_minimize_jit = jax2torch( get_future_reward_minimize_jit )
-num_params = params_policy.size
-
-class HorizonReward(torch.nn.Module):
-    def __init__(self, num_params):
-        super().__init__()
-        self.param = torch.nn.Parameter( torch.randn(num_params), requires_grad=True )
-
-    def forward(self):
-        return torch_get_future_reward_minimize_jit(self.param)
-    
-    def get_parameters(self):
-        return self.param.detach().numpy()
-
 
 if (optimize_offline):
     #train using scipy ###########################
@@ -179,59 +167,85 @@ if (optimize_offline):
         print(f"reward final GD : { get_future_reward_minimize_jit( params_policy ) }")
 
     if use_torch:
-        model = HorizonReward(num_params)
-        best_params = np.copy(model.get_parameters())
-        best_cost = np.copy(model().detach().numpy())
+        cost = get_future_reward_minimize_jit(params_policy)
+        best_params = np.copy(params_policy)
+        best_cost = np.copy(cost)
 
         if use_adam:
             for j in range(n_restarts):
-                model = HorizonReward(num_params)
-                cost = model()
-                cost_initial = np.copy( cost.detach().numpy() )
+
+                params_policy, key = initialize_parameters(key)
+
+                cost = get_future_reward_minimize_jit(params_policy)
+                cost_initial = np.copy(cost)
                 best_cost_local = np.copy(cost_initial)
-                best_params_local = np.copy(model.get_parameters())
-                # print(f"run: {j}, cost initial:{ cost }")
-                optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, weight_decay=0.0)#)0.0001)
-                iter_adam = 10000
+                best_params_local = np.copy(params_policy)
+
+                start_learning_rate = 0.5#0.001
+
+                # optimizer = optax.adam(start_learning_rate)
+                # opt_state = optimizer.init(params_policy)
+
+                # Exponential decay of the learning rate.
+                scheduler = optax.exponential_decay(
+                    init_value=start_learning_rate, 
+                    transition_steps=1000,
+                    decay_rate=0.999)
+
+                # Combining gradient transforms using `optax.chain`.
+                gradient_transform = optax.chain(
+                    optax.clip_by_global_norm(2.0),  # Clip by the gradient by the global norm.
+                    optax.scale_by_adam(),  # Use the updates from adam.
+                    optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
+                    # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
+                    optax.scale(-1.0)
+                )
+
+                opt_state = gradient_transform.init(params_policy)
+
+
+                iter_adam = 1000#100000
                 for i in range(iter_adam + 1):#range(50000):
                     t0 = time.time()
-                    cost = model()
-                    if (cost.detach().numpy()<best_cost):
-                        # print(f"cost:{cost.detach().numpy()}, prev;{best_cost}")
-                        best_cost = np.copy(cost.detach().numpy())
-                        best_params = np.copy(model.get_parameters())
-                    if (cost.detach().numpy()<best_cost_local):
-                        best_cost_local = np.copy(cost.detach().numpy())
-                        best_params_local = np.copy(model.get_parameters())
+                    cost = get_future_reward_minimize_jit(params_policy)
+                    if (cost<best_cost):
+                        # print(f"cost:{cost}, prev;{best_cost}")
+                        best_cost = np.copy(cost)
+                        best_params = np.copy(params_policy)
+                    if (cost<best_cost_local):
+                        best_cost_local = np.copy(cost)
+                        best_params_local = np.copy(params_policy)
                     if i==iter_adam:
                         continue
-                    optimizer.zero_grad()
-                    cost.backward(retain_graph = False)
-                    optimizer.step()
-                    # if i%100==0:
-                    #     print(f"i:{i}, cost:{cost}")
+                    # grads = jax.grad(get_future_reward_minimize_jit)(params_policy)
+                    grads = get_future_reward_minimize_grad_jit(params_policy)
+                    # updates, opt_state = optimizer.update(grads, opt_state)
+                    updates, opt_state = gradient_transform.update(grads, opt_state)
+                    params_policy = optax.apply_updates(params_policy, updates)
+                    if i%100==0:
+                        print(f"i:{i}, cost:{cost}, grad:{np.max(np.abs(grads))}")
                     # params_policy = model.get_parameters()
-                    print(f"time: {time.time()-t0}, cost:{cost.detach().numpy()}")
+                    # print(f"time: {time.time()-t0}, cost:{cost}")
                 print(f"run: {j}, cost initial:{cost_initial}, best cost local:{best_cost_local}, cost final:{best_cost}")
             params_policy = best_params
                 
-            with open('adam_1_test_2.npy', 'wb') as f:
+            with open('adam_1_jax_test.npy', 'wb') as f:
                 np.save(f, best_params)    
                 
         else:
             print(f"Using LBFGS")
-            optimizer = torch.optim.LBFGS(model.parameters())#, lr=0.005,  history_size=10, max_iter=10)
-            for i in range(100):
-                def closure():
-                    # Zero gradients
-                    optimizer.zero_grad()
-                    # Forward pass
-                    cost = model()
-                    # Backward pass
-                    cost.backward()
-                    return cost
-                optimizer.step(closure)
-            params_policy = model.get_parameters()    
+            # optimizer = torch.optim.LBFGS(model.parameters())#, lr=0.005,  history_size=10, max_iter=10)
+            # for i in range(100):
+            #     def closure():
+            #         # Zero gradients
+            #         optimizer.zero_grad()
+            #         # Forward pass
+            #         cost = model()
+            #         # Backward pass
+            #         cost.backward()
+            #         return cost
+            #     optimizer.step(closure)
+            # params_policy = model.get_parameters()    
             print(f"reward final torch : { get_future_reward_minimize_jit( params_policy ) }")
         # with open('result_opt_2.npy', 'wb') as f:
         #     np.save(f, params_policy)

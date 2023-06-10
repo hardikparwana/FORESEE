@@ -116,9 +116,9 @@ sigma_point_compress_sum = lambda a,b: np.sum(sigma_point_compress(a,b)[0])
 def reward_UT_Mean_Evaluator_basic(sigma_points, weights):
     # return np.sum(sigma_points)
     mu = 0
-    mu = mu + mc_pilco_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
+    mu = mu + compute_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
     for i in range(1, sigma_points.shape[1]):
-        mu = mu + mc_pilco_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
+        mu = mu + compute_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
     return mu
 reward_UT_Mean_Evaluator_basic_jit = jit(reward_UT_Mean_Evaluator_basic)
 reward_UT_Mean_Evaluator_basic_sum = lambda a,b: np.sum(reward_UT_Mean_Evaluator_basic(a,b)[0])

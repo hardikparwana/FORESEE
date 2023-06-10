@@ -8,9 +8,6 @@ jax.config.update("jax_enable_x64", True)
 # GP related libraries
 jax.config.update("jax_enable_x64", True)
 
-import scipy
-from scipy.optimize import minimize as minimize_scipy
-
 import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 plt.rcParams.update({'font.size': 10})
