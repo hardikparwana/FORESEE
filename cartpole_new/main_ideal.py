@@ -51,7 +51,7 @@ observation, info = env.reset(seed=42)
 
 key = random.PRNGKey(100)
 key, subkey = random.split(key)
-policy_type = 'gaussian'
+policy_type = 'with angles'
 key, params_policy =  Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
 
 t = 0
@@ -69,8 +69,8 @@ state = np.copy(env.get_state())
 optimize_offline = True
 use_adam = True
 use_custom_gd = False
-n_restarts = 5#100
-iter_adam = 50
+n_restarts = 10#100
+iter_adam = 5000
 adam_start_learning_rate = 0.5#0.001
 custom_gd_lr_rate = 0.05
 
@@ -163,13 +163,14 @@ while t < tf:
         reward, param_policy_grad = get_future_reward( state, params_policy, dt_outer ), get_future_reward_grad( state, params_policy, dt_outer )
         print(f"reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}, action:{action}")
         param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
-        params_policy = params_policy - lr_rate * param_policy_grad
+        params_policy = params_policy - custom_gd_lr_rate * param_policy_grad
         # clip is needed
         # res = minimize( get_future_reward_jit, params_policy, method='BFGS', tol=1e-8, options=dict(maxiter=maxiter) ) #1e-8
         # params_policy = res.x
    
 
     action = policy( state, params_policy ).reshape(-1,1)
+    print(f"theta:{ state[2,0]*180/np.pi }, input:{ action }, state:{ state.T }")
     next_state = step(state, action, dt_inner)
     env.set_state( (next_state[0,0].item(), next_state[1,0].item(), next_state[2,0].item(), next_state[3,0].item()) )
     env.render()  

@@ -132,9 +132,9 @@ def sigma_point_compress( sigma_points, weights, weights_cov ):
 def reward_UT_Mean_Evaluator_basic(sigma_points, weights, weights_cov):
     # return np.sum(sigma_points)
     mu = 0
-    mu = mu + compute_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
+    mu = mu + mc_pilco_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
     for i in range(1, sigma_points.shape[1]):
-        mu = mu + compute_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
+        mu = mu + mc_pilco_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
     return mu
 reward_UT_Mean_Evaluator_basic_jit = jit(reward_UT_Mean_Evaluator_basic)
 reward_UT_Mean_Evaluator_basic_sum = lambda a,b: np.sum(reward_UT_Mean_Evaluator_basic(a,b)[0])
@@ -150,7 +150,8 @@ def compute_reward( state ):
     # return state[1,0]
     # return -10*np.cos(theta)#+0.08*np.square(pos/2)#+0.001*np.square(speed)
     # return -100*np.cos(theta)+0.1*np.square(speed)+10*np.square(pos)
-    return - 100 * np.cos(theta) + 0.1 * np.square(pos)
+    # return - 100 * np.cos(theta) + 0.1 * np.square(pos)
+    return 100 * np.cos(theta) + 1.0 * np.square(pos)
 
 
 def mc_pilco_reward(state):
@@ -162,6 +163,6 @@ def mc_pilco_reward(state):
     lengthscales = [3.0, 1.0] # theta, p
 
     target_x = 0#target_state[1]
-    target_theta = 0#np.pi#  target_state[0]
+    target_theta = np.pi#  target_state[0]
 
     return (1-np.exp( -( (np.abs(theta)-target_theta) / lengthscales[0] )**2 - ( (x-target_x)/lengthscales[1] )**2 ) )

@@ -60,7 +60,7 @@ def Sum_of_gaussians( state, policy_params, u_max = 1, state_dim = 4, input_dim 
     state = (state[:,0] / scale_factor).reshape(-1,1)
     exponent = np.sum( np.square((state - centers)/lengthscales)  , axis = 0 )
     control_input = np.sum( weights[:,0] * np.exp( -exponent ) ).reshape(-1,1)
-    return squash_inputs( control_input, u_max )[0,0]
+    return squash_inputs( control_input, u_max )
 
 def Sum_of_gaussians_with_angle( state, policy_params, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 2 ):
     new_state = np.array([ state[0,0], state[1,0], state[3,0], np.sin(state[2,0]), np.cos(state[3,0]) ]).reshape(-1,1)
@@ -68,7 +68,8 @@ def Sum_of_gaussians_with_angle( state, policy_params, u_max = 10, state_dim = 4
     
 @jit
 def policy(state, params_policy):
-    return Sum_of_gaussians( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 50 )
+    # return Sum_of_gaussians( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 50 )
+    return Sum_of_gaussians_with_angle( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 50 )
  
 # @jit 
 def random_policy( key ):

@@ -12,6 +12,7 @@ import gym
 from gym import logger, spaces
 from gym.envs.classic_control import utils
 from gym.error import DependencyNotInstalled
+from utils.utils import wrap_angle
 
 from gym_wrappers.record_video import RecordVideo
   
@@ -215,9 +216,10 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             options,  -1.0, 1.0  # default low #-1.0, 1.0 #
         )  # default high
         self.state = self.np_random.uniform(low=low, high=high, size=(4,))
-        self.state[2] = np.pi/2#np.pi/12 # 0 #np.pi 
         self.state[0] = 0.0 #- self.x_threshold + 0.2
         self.state[1] = 0.0
+        self.state[2] = 3.0*np.pi/4.0#0.01#2.0*np.pi/2#np.pi/12 # 0 #np.pi 
+        self.state[3] = 0.0
         self.steps_beyond_terminated = None
 
         if self.render_mode == "human":
@@ -256,7 +258,10 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         if self.state is None:
             return None
 
-        x = self.state
+        x = np.copy(self.state)
+        
+        # for gym, theta = pi is the stable equilibrium
+        x[2] = wrap_angle( np.pi - x[2] )
         # print(f"x:{x[0]}, theta:{x[2]}")
         self.surf = pygame.Surface((self.screen_width, self.screen_height))
         self.surf.fill((255, 255, 255))

@@ -6,6 +6,7 @@ def step(y, u, dt):
     System of first order equations for a cart-pole system
     The policy commands the force applied to the cart
     (stable equilibrium point with the pole down at [~,0,0,0])
+    # theta = 0 at stable equilibrium
     """
     
     x, x_dot, theta, theta_dot = y[0,0], y[1,0], y[2,0], y[3,0]
@@ -22,10 +23,11 @@ def step(y, u, dt):
             (2*m2*l*theta_dot**2*np.sin(theta)+3*m2*g*np.sin(theta)*np.cos(theta)+4*u[0,0]-4*b*x_dot)/den,
             theta_dot,
             (-3*m2*l*theta_dot**2*np.sin(theta)*np.cos(theta)-6*(m1+m2)*g*np.sin(theta)-6*(u[0,0]-b*x_dot)*np.cos(theta))/(l*den)]).reshape(-1,1)
-
+    print(f"dy_dt: {dydt.T}")
     new_state = y + dydt * dt
+    new_state_clipped = np.array([ new_state[0,0], new_state[1,0], wrap_angle(new_state[2,0]), new_state[3,0] ]).reshape(-1,1)
 
-    return new_state
+    return new_state_clipped
 
 def step_using_xdot(state, state_dot, dt):
      state_next = state + state_dot * dt
