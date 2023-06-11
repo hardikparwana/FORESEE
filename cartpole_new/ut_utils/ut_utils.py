@@ -1,15 +1,15 @@
 import jax.numpy as np
 from jax import jit, lax
-from robot_models.cartpole2D import get_state_dot_noisy, step_using_xdot
-from gp_utils import predict_with_gp_params
+from robot_models.cartpole2D_mcpilco import get_state_dot_noisy, step_using_xdot
+from cartpole_new.gp_utils import predict_with_gp_params
 
-# @jit
+@jit
 def get_mean( sigma_points, weights ):
     weighted_points = sigma_points * weights[0]
     mu = np.sum( weighted_points, 1 ).reshape(-1,1)
     return mu
 
-# @jit
+@jit
 def get_mean_cov(sigma_points, weights, weights_cov):
     
     # mean
@@ -22,7 +22,7 @@ def get_mean_cov(sigma_points, weights, weights_cov):
     cov = weighted_centered_points @ centered_points.T
     return mu, cov
 
-#@jit
+@jit
 def get_ut_cov_root_diagonal(cov):
     offset = 0.000 # TODOs set offset so that it is never zero
     root0 = np.sqrt((offset+cov[0,0]))
@@ -33,16 +33,16 @@ def get_ut_cov_root_diagonal(cov):
     root_term = np.diag( np.array([root0, root1, root2, root3]) )
     return root_term
 
-#@jit
+@jit
 def initialize_sigma_points(X):
     # return 2N + 1 points
     n = X.shape[0]
     num_points = 2*n + 1
     sigma_points = np.repeat( X, num_points, axis=1 )
     weights = np.ones((1,num_points)) * 1.0/( num_points )
-    return sigma_points, weights
+    return sigma_points, weights, np.copy(weights)
 
-# @jit
+@jit
 def generate_sigma_points_gaussian( mu, cov_root, base_term, factor ):
     n = mu.shape[0]     
     N = 2*n + 1 # total points
@@ -76,7 +76,7 @@ def get_state_dot_with_gp(state, control, gp_params1, gp_params2, gp_params3, gp
     return np.concatenate((mu1, mu2, mu3, mu4)).reshape(-1,1), np.diag( np.concatenate( (var1, var2, var3, var4) ) )
 
 
-# @jit
+@jit
 def sigma_point_expand_with_gp(sigma_points, weights, weights_cov, control, dynamics_params, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
    
     n, N = sigma_points.shape   
@@ -99,7 +99,30 @@ def sigma_point_expand_with_gp(sigma_points, weights, weights_cov, control, dyna
 
     return new_points, new_weights, new_weights_cov
 
-#@jit
+@jit
+def sigma_point_expand(sigma_points, weights, weights_cov, control, dt):
+   
+    n, N = sigma_points.shape   
+    # dt_outer = 0  
+    #TODO  
+    mu, cov = get_state_dot_noisy(sigma_points[:,0].reshape(-1,1), control.reshape(-1,1) )
+    root_term = get_ut_cov_root_diagonal(cov) 
+    temp_points, temp_weights1, temp_weights2 = generate_sigma_points_gaussian( mu, root_term, sigma_points[:,0].reshape(-1,1), dt )
+    new_points = np.copy( temp_points )
+    new_weights = ( np.copy( temp_weights1 ) * weights[0,0]).reshape(1,-1)
+    new_weights_cov = ( np.copy( temp_weights2 ) * weights_cov[0,0]).reshape(1,-1)
+        
+    for i in range(1,N):
+        mu, cov = get_state_dot_noisy(sigma_points[:,i].reshape(-1,1), control.reshape(-1,1) )
+        root_term = get_ut_cov_root_diagonal(cov)           
+        temp_points, temp_weights1, temp_weights2 = generate_sigma_points_gaussian( mu, root_term, sigma_points[:,i].reshape(-1,1), dt )
+        new_points = np.append(new_points, temp_points, axis=1 )
+        new_weights = np.append( new_weights, (temp_weights1 * weights[0,i]).reshape(1,-1) , axis=1 )
+        new_weights_cov = np.append( new_weights_cov, (temp_weights2 * weights_cov[0,i]).reshape(1,-1) , axis=1 )
+
+    return new_points, new_weights, new_weights_cov
+
+@jit
 def sigma_point_compress( sigma_points, weights, weights_cov ):
     mu, cov = get_mean_cov( sigma_points, weights, weights_cov )
     cov_root_term = get_ut_cov_root_diagonal( cov )  
@@ -128,3 +151,17 @@ def compute_reward( state ):
     # return -100*np.cos(theta)+0.1*np.square(speed)+10*np.square(pos)
     return - 100 * np.cos(theta) + 0.1 * np.square(pos)
 compute_reward_jit = jit(compute_reward)
+
+
+def mc_pilco_reward(state):
+    """ 
+    Cost function given by the combination of the saturated distance between |theta| and 'target angle', and between x and 'target position'.
+    """   
+    x = state[0,0]#states_sequence[:,:,pos_index]
+    theta = state[2,0]#states_sequence[:,:,angle_index]
+    lengthscales = [3.0, 1.0] # theta, p
+
+    target_x = 0#target_state[1]
+    target_theta = 0#np.pi#  target_state[0]
+
+    return (1-np.exp( -( (np.abs(theta)-target_theta) / lengthscales[0] )**2 - ( (x-target_x)/lengthscales[1] )**2 ) )

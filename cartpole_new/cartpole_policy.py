@@ -5,119 +5,103 @@ from jax import lax
 import time
 # Nonlinear RBF network
 
-def policy(params_policy, X):
-    # n = 4 # dim of state
-    # N = 50 # number of basis functions  #50:593 , 30: 355. matmul instead of @ 444... gets slower
-    N = 50
-    n = 4
-    param_w = params_policy[0:N]
-    param_mu = params_policy[N:n*N+N].reshape(n,N)
-    param_Sigma = params_policy[N*n+N:].reshape(N,10)
+def squash_inputs( u, u_max = 10 ):
+    return u_max * np.tanh( u / u_max )
 
-    pi = np.zeros((1,1))
+def random_exploration( key, input_dim=1, u_max = 10 ):
+    key, subkey = random.split(key)
+    rand_u = u_max*(2*random.uniform( subkey, shape=( input_dim, 1 )) -1 )
+    return rand_u[0,0]
 
-    def body(t, pi):
-        diff = X - param_mu[:,t].reshape(-1,1)    
-        Sigma = np.array([  
-            [ param_Sigma[t,0], 0.0, 0.0, 0.0 ],
-            [ param_Sigma[t,4], param_Sigma[t,1], 0.0, 0.0 ],
-            [ param_Sigma[t,5], param_Sigma[t,6], param_Sigma[t,2], 0.0 ],
-            [ param_Sigma[t,7], param_Sigma[t,8], param_Sigma[t,9], param_Sigma[t,3] ]
-        ])
-        Sigma = n * np.eye(n) + Sigma.T @ Sigma
-        Sigma_inv = np.linalg.inv( Sigma )
-        phi = np.exp( -0.5 * diff.T @ Sigma_inv @ diff )
-        # phi = np.exp( -0.5 * np.matmul(np.matmul(diff.T, Sigma_inv),diff ) ) 
-        pi = pi + param_w[t] * phi
-        return pi
+def Sum_of_gaussians_initialize(key, state_dim, input_dim, type = 'gaussian', num_basis = 50, lengthscale = 1, centers_init_min = -1, centers_init_max = 1):
+        
+    if type=='gaussian':
+        # without extra angle        
+        lengthscales_init = lengthscale* np.ones(state_dim)
+        log_lengthscales = np.log( lengthscales_init )
     
-    # return np.clip(lax.fori_loop( 0, N, body, pi ), -20, 20)[0,0]
-    return np.clip(lax.fori_loop( 0, N, body, pi ), -10, 10)[0,0]
+        key, subkey = random.split(key)
+        angle_centers = 2*np.pi*(random.uniform(subkey, shape=(num_basis,1))-0.5)
+        key, subkey = random.split(key)
+        not_angle_centers = 2*np.pi*(random.uniform(subkey, shape=(num_basis,3))-0.5)    
+        centers_init = np.append( not_angle_centers, angle_centers, axis=1 )
+    elif type=='with angles':
+        #with extra angles        
+        lengthscales_init = lengthscale* np.ones(state_dim+1)
+        log_lengthscales = np.log( lengthscales_init )
+    
+        key, subkey = random.split(key)
+        angle_centers = 2*np.pi*(random.uniform(subkey, shape=(num_basis,1))-0.5)
+        cos_center = np.cos(angle_centers)
+        sin_center = np.sin(angle_centers)
+        key, subkey = random.split(key)
+        not_angle_centers = 2*np.pi*(random.uniform(subkey, shape=(num_basis,3))-0.5)    
+        centers_init = np.append( not_angle_centers, np.append(sin_center, cos_center, axis=1), axis=1 )
+        
+    elif type=='random':
+        # all random
+        key, subkey = random.split(key)
+        centers_init = centers_init_min * ( np.ones(state_dim, num_basis) ) + (centers_init_max-centers_init_min)*random.uniform( subkey, shape=(state_dim, num_basis) )
+    else:
+        print(f"Incorrect type passed")
+        exit(  )
+    
+    weights_init = np.ones((input_dim, num_basis))
+    
+    return key, np.append( log_lengthscales.reshape(-1,1), np.append( centers_init.reshape(-1,1), weights_init.reshape(-1,1) , axis=0), axis=0 )
+    
+def Sum_of_gaussians( state, policy_params, u_max = 1, state_dim = 4, input_dim = 1, num_basis = 2 ):
+    log_lengthscales = policy_params[0:state_dim]
+    centers = policy_params[state_dim:state_dim+num_basis*state_dim].reshape(state_dim, num_basis)
+    weights = policy_params[-input_dim*num_basis:]
+    
+    lengthscales = np.exp( log_lengthscales )    
+    scale_factor = np.ones(state_dim)
+    state = (state[:,0] / scale_factor).reshape(-1,1)
+    exponent = np.sum( np.square((state - centers)/lengthscales)  , axis = 0 )
+    control_input = np.sum( weights[:,0] * np.exp( -exponent ) ).reshape(-1,1)
+    return squash_inputs( control_input, u_max )[0,0]
 
-policy_jit = jit(policy)
-policy_grad = grad(policy, 0)
-policy_grad_jit = jit(grad(policy))
+def Sum_of_gaussians_with_angle( state, policy_params, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 2 ):
+    new_state = np.array([ state[0,0], state[1,0], state[3,0], np.sin(state[2,0]), np.cos(state[3,0]) ]).reshape(-1,1)
+    return Sum_of_gaussians( new_state, policy_params, u_max = u_max, state_dim = state_dim+1, input_dim = input_dim, num_basis = num_basis )
+    
+@jit
+def policy(state, params_policy):
+    return Sum_of_gaussians( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 50 )
+ 
+# @jit 
+def random_policy( key ):
+    return random_exploration( key, input_dim=1, u_max = 1 )
+
+@jit
+def policy_grad( state, params_policy):
+    return grad( policy, 1 )(state, params_policy)
+
+# policy_grad = jit(grad(policy, 1))
+# policy_grad_jit = jit(grad(policy))
 
 if 0:
     print("Testing Cart Pole Policy")
-
-    test_key = random.PRNGKey(0)
-    test_N = 50
-
-    def generate_psd_matrix_inverse():
-        n = 4
-        N = test_N
-        key = random.PRNGKey(0)
-        key, subkey = random.split(key)
-        params_temp = random.uniform( subkey, shape=( int(n + (n**2 -n)/2.0),1) )
-        Sigma = np.array([  
-                [ params_temp[0,0], 0.0, 0.0, 0.0 ],
-                [ params_temp[4,0], params_temp[1,0], 0.0, 0.0 ],
-                [ params_temp[5,0], params_temp[6,0], params_temp[2,0], 0.0 ],
-                [ params_temp[7,0], params_temp[8,0], params_temp[9,0], params_temp[3,0] ]
-            ])
-        Sigma = 4 * np.eye(4) + Sigma.T @ Sigma
-        Sigma_inverse = np.linalg.inv( Sigma )
-        Sigma_inverse = (Sigma_inverse + Sigma_inverse.T) /2.0
-        Sigmas = np.copy( Sigma_inverse.reshape(1,-1) )
-
-        for i in range(1,N):
-            # Diagonal elements
-            key, subkey = random.split(key)
-            params_temp = random.uniform( subkey, shape=( 1,int(n + (n**2 -n)/2.0)) )
-            Sigma = np.array([  
-                [ params_temp[0,0], 0.0, 0.0, 0.0 ],
-                [ params_temp[4,0], params_temp[1,0], 0.0, 0.0 ],
-                [ params_temp[5,0], params_temp[6,0], params_temp[2,0], 0.0 ],
-                [ params_temp[7,0], params_temp[8,0], params_temp[9,0], params_temp[3,0] ]
-            ])
-            Sigma = 4 * np.eye(4) + Sigma.T @ Sigma
-            Sigma_inverse = np.linalg.inv( Sigma )
-            Sigma_inverse = (Sigma_inverse + Sigma_inverse.T) /2.0
-            Sigmas = np.append( Sigmas, np.copy( Sigma_inverse.reshape(1,-1) ), axis=0 )
-        return Sigmas
-
-    # Testing Parameters
-    key = random.PRNGKey(100)
-    n = 4
-    N = 50
+    key = random.PRNGKey(0)
     key, subkey = random.split(key)
-    param_w = random.uniform(subkey, shape=(N,1))[:,0] - 0.5#+ 0.5#+ 2.0  #0.5 work with Lr: 5.0
+    key, params_policy = Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = 'gaussian', num_basis = 200, lengthscale = 1, centers_init_min = -1, centers_init_max = 1)
 
-    key, subkey = random.split(key)
-    param_mu = random.uniform(subkey, shape=(4,N))- 0.5 * np.ones((4,N)) #- 3.5 * np.ones((4,N))
-
-    Sigma_invs = generate_psd_matrix_inverse()
-    params_policy = np.append( param_w, param_mu.reshape(-1,1)[:,0] )
-
-    # Testing input state
-    test_X = random.uniform(key, shape=(4,1))
-
-    # run once to force JIT compilation
+    # key, params_policy = Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = 'with angles', num_basis = 200, lengthscale = 1, centers_init_min = -1, centers_init_max = 1)
+   
+    init_state = np.array([0.0,0,0,0]).reshape(-1,1)   
+    
+    policy( init_state, params_policy )
+    policy_grad( init_state, params_policy )   
+    
     t0 = time.time()
-    test_u = policy( params_policy, Sigma_invs, test_X, n, N )
-    print(f"time scan:{time.time()-t0}")
-
+    action = policy( init_state, params_policy)
+    print(f"policy time jit:{time.time()-t0}, action:{action}")
+    
+    random_policy( key )
+    print(f"random: {random_policy(key)}")
+    
     t0 = time.time()
-    test_u = policy( params_policy, Sigma_invs, test_X, n, N )
-    print(f"time scan again:{time.time()-t0}")
-
-    t0 = time.time()
-    test_u = policy_jit( params_policy, Sigma_invs, test_X, n, N )
-    print(f"time:{time.time()-t0}")
-
-    t0 = time.time()
-    test_u = policy_jit( params_policy, Sigma_invs, test_X, n, N )
-    print(f"time jit again:{time.time()-t0}")
-
-    print("u", test_u)
-
-    t0 = time.time()
-    test_u = policy_grad_jit( params_policy, Sigma_invs, test_X, n, N )
-    print(f"time:{time.time()-t0}")
-
-    t0 = time.time()
-    test_u = policy_grad_jit( params_policy, Sigma_invs, test_X, n, N )
-    print(f"time jit again:{time.time()-t0}")
-
-    # print("u grad", test_u)
+    grads = policy_grad( init_state, params_policy)
+    print(f"grad time jit:{time.time()-t0}, grad = {grads}")
+    
