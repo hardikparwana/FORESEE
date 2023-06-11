@@ -24,13 +24,13 @@ def get_mean_cov(sigma_points, weights, weights_cov):
 
 @jit
 def get_ut_cov_root_diagonal(cov):
-    offset = 0.000 # TODOs set offset so that it is never zero
-    root0 = np.sqrt((offset+cov[0,0]))
-    root1 = np.sqrt((offset+cov[1,1]))
-    root2 = np.sqrt((offset+cov[2,2]))
-    root3 = np.sqrt((offset+cov[3,3]))
-    # return cov
-    root_term = np.diag( np.array([root0, root1, root2, root3]) )
+    # offset = 0.001 # TODOs set offset so that it is never zero
+    # root0 = np.sqrt((offset+cov[0,0]))
+    # root1 = np.sqrt((offset+cov[1,1]))
+    # root2 = np.sqrt((offset+cov[2,2]))
+    # root3 = np.sqrt((offset+cov[3,3]))
+    # root_term = np.diag( np.array([root0, root1, root2, root3]) )
+    root_term = np.zeros((4,4))
     return root_term
 
 @jit
@@ -147,10 +147,10 @@ def compute_reward( state ):
     pos = state[0,0]
     # return np.square(theta-0.0)
     # print(f"theta:{theta}")
-    return -10*np.cos(theta)#+0.08*np.square(pos/2)#+0.001*np.square(speed)
+    # return state[1,0]
+    # return -10*np.cos(theta)#+0.08*np.square(pos/2)#+0.001*np.square(speed)
     # return -100*np.cos(theta)+0.1*np.square(speed)+10*np.square(pos)
     return - 100 * np.cos(theta) + 0.1 * np.square(pos)
-compute_reward_jit = jit(compute_reward)
 
 
 def mc_pilco_reward(state):

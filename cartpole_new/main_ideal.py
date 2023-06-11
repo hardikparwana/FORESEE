@@ -14,13 +14,13 @@ from cartpole_new.cartpole_policy import policy, policy_grad, random_exploration
 from cartpole_new.ut_utils.ut_utils import *
 
 # visualization
-from robot_models.custom_cartpole_constrained import CustomCartPoleEnv
-from robot_models.cartpole2D import step
+from robot_models.custom_cartpole_mc_pilco import CustomCartPoleEnv
+from robot_models.cartpole2D_mcpilco import step
 from cartpole_new.gym_wrappers.record_video import RecordVideo
 
 key = random.PRNGKey(2)
 
-# @jit
+@jit
 def get_future_reward(X, params_policy, dt):
     states, weights, weights_cov = initialize_sigma_points(X)
     reward = 0
@@ -39,7 +39,7 @@ def get_future_reward(X, params_policy, dt):
     
     return lax.fori_loop( 0, H, body, (reward, states, weights, weights_cov) )[0]
 
-# @jit
+@jit
 def get_future_reward_grad(X, params_policy, dt):
     return grad(get_future_reward, 1)(X, params_policy, dt)
 
@@ -55,7 +55,7 @@ policy_type = 'gaussian'
 key, params_policy =  Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
 
 t = 0
-H = 20
+H = 60
 dt_inner = 0.05
 dt_outer = 0.05
 tf = H * dt_outer
@@ -69,15 +69,16 @@ state = np.copy(env.get_state())
 optimize_offline = True
 use_adam = True
 use_custom_gd = False
-n_restarts = 20#100
+n_restarts = 5#100
 iter_adam = 50
-lr_rate = 0.05
+adam_start_learning_rate = 0.5#0.001
+custom_gd_lr_rate = 0.05
 
 t0 = time.time()
 reward = get_future_reward( state, params_policy, dt_outer)
 grads = get_future_reward_grad( state, params_policy, dt_outer )
-print(f"initial reward: {reward}, grad:{grads}, time to jit:{ time.time()-t0 }")
-exit()
+print(f"initial reward: {reward}, grad:{np.max(np.abs(grads))}, time to jit:{ time.time()-t0 }")
+# exit()
 
 if (optimize_offline):
     #train using scipy ###########################
@@ -86,7 +87,7 @@ if (optimize_offline):
         for i in range(100):
             param_policy_grad = get_future_reward_grad( state, params_policy, dt_inner)
             param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
-            params_policy = params_policy - lr_rate * param_policy_grad
+            params_policy = params_policy - custom_gd_lr_rate * param_policy_grad
             params_policy =  np.clip( params_policy, -10, 10 )
         print(f"reward final GD : { get_future_reward( state, params_policy, dt_outer ) }")
 
@@ -96,21 +97,19 @@ if (optimize_offline):
         best_cost = np.copy(cost)
         for j in range(n_restarts):
 
-            key, params_policy = Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
+            key, params_policy = Sum_of_gaussians_initialize(key, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
 
             cost = get_future_reward( state, params_policy, dt_outer )
             cost_initial = np.copy(cost)
             best_cost_local = np.copy(cost_initial)
             best_params_local = np.copy(params_policy)
 
-            start_learning_rate = 0.5#0.001
-
             # optimizer = optax.adam(start_learning_rate)
             # opt_state = optimizer.init(params_policy)
 
             # Exponential decay of the learning rate.
             scheduler = optax.exponential_decay(
-                init_value=start_learning_rate, 
+                init_value=adam_start_learning_rate, 
                 transition_steps=1000,
                 decay_rate=0.999)
 
@@ -144,8 +143,8 @@ if (optimize_offline):
                 updates, opt_state = gradient_transform.update(grads, opt_state)
                 
                 params_policy = optax.apply_updates(params_policy, updates)
-                if i%100==0:
-                    print(f"i:{i}, cost:{cost}, grad:{np.max(np.abs(grads))}")
+                # if i%100==0:
+                #     print(f"i:{i}, cost:{cost}, grad:{np.max(np.abs(grads))}")
 
                 # print(f"time: {time.time()-t0}, cost:{cost}")
             print(f"run: {j}, cost initial:{cost_initial}, best cost local:{best_cost_local}, cost final:{best_cost}")
@@ -155,18 +154,42 @@ if (optimize_offline):
         with open('new_ideal.npy', 'wb') as f:
             np.save(f, best_params)    
 
+
+input("Press Enter to continue...")
+while t < tf:
+
+    if not optimize_offline:
+        # tune parameters
+        reward, param_policy_grad = get_future_reward( state, params_policy, dt_outer ), get_future_reward_grad( state, params_policy, dt_outer )
+        print(f"reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}, action:{action}")
+        param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
+        params_policy = params_policy - lr_rate * param_policy_grad
+        # clip is needed
+        # res = minimize( get_future_reward_jit, params_policy, method='BFGS', tol=1e-8, options=dict(maxiter=maxiter) ) #1e-8
+        # params_policy = res.x
+   
+
+    action = policy( state, params_policy ).reshape(-1,1)
+    next_state = step(state, action, dt_inner)
+    env.set_state( (next_state[0,0].item(), next_state[1,0].item(), next_state[2,0].item(), next_state[3,0].item()) )
+    env.render()  
+    
+    state = np.copy(next_state)
+    t = t + dt_inner
+env.close()
+
             
     ##################################
 # exit()
 
 
-    # for i in range(H):
-    #     mean_position = get_mean( states, weights )
-    #     solution = policy( mean_position, params_policy )
-    #     next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand( states, weights, weights_cov, solution, dt)
-    #     next_states, next_weights, next_weights_cov = sigma_point_compress( next_states_expanded, next_weights_expanded, next_weights_cov_expanded )
-    #     states = next_states
-    #     weights = next_weights
-    #     weights_cov = next_weights_cov
-    #     reward = reward + reward_UT_Mean_Evaluator_basic( states, weights, weights_cov )
-    # return reward
+# mean_position = get_mean( states, weights )
+# solution = policy( mean_position, params_policy )
+# next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand( states, weights, weights_cov, solution, dt)
+# next_states, next_weights, next_weights_cov = sigma_point_compress( next_states_expanded, next_weights_expanded, next_weights_cov_expanded )
+# states = next_states
+# weights = next_weights
+# weights_cov = next_weights_cov
+# reward = reward + reward_UT_Mean_Evaluator_basic( states, weights, weights_cov )
+# # return np.sum(states)
+# return reward
