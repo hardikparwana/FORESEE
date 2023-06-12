@@ -31,8 +31,8 @@ def get_future_reward(X, params_policy, gp_params1, gp_params2, gp_params3, gp_p
         reward, states, weights, weights_cov = inputs
         mean_position = get_mean( states, weights )
         solution = policy( mean_position, params_policy )
-        next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_rk4( states, weights, weights_cov, solution, dt_outer)
-        # next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_with_gp( states, weights, weights_cov, solution, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
+        # next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_rk4( states, weights, weights_cov, solution, dt_outer)
+        next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_with_gp( states, weights, weights_cov, solution, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
         next_states, next_weights, next_weights_cov = sigma_point_compress( next_states_expanded, next_weights_expanded, next_weights_cov_expanded )
         states = next_states
         weights = next_weights
@@ -155,11 +155,11 @@ state = np.copy(env.get_state())
 
 # optimization parameters
 optimize_offline = True
-use_adam = False
+use_adam = True
 use_custom_gd = False
-use_jax_scipy = True
+use_jax_scipy = False
 n_restarts = 10#50#100
-iter_adam = 4000
+iter_adam = 4000#4000
 adam_start_learning_rate = 0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
 
