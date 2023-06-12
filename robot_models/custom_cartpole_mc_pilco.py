@@ -218,7 +218,7 @@ class CustomCartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.state = self.np_random.uniform(low=low, high=high, size=(4,))
         self.state[0] = 0.0 #- self.x_threshold + 0.2
         self.state[1] = 0.0
-        self.state[2] = 3.0*np.pi/4.0#0.01#2.0*np.pi/2#np.pi/12 # 0 #np.pi 
+        self.state[2] = 11.0*np.pi/12#3.0*np.pi/4.0#0.01#2.0*np.pi/2#np.pi/12 # 0 #np.pi 
         self.state[3] = 0.0
         self.steps_beyond_terminated = None
 

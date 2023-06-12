@@ -8,7 +8,7 @@ def step(y, u, dt):
     (stable equilibrium point with the pole down at [~,0,0,0])
     # theta = 0 at stable equilibrium
     """
-    
+    return rk4_integration( y, u, dt )
     x, x_dot, theta, theta_dot = y[0,0], y[1,0], y[2,0], y[3,0]
     
     m1 = 0.5  # mass of the cart
@@ -23,11 +23,20 @@ def step(y, u, dt):
             (2*m2*l*theta_dot**2*np.sin(theta)+3*m2*g*np.sin(theta)*np.cos(theta)+4*u[0,0]-4*b*x_dot)/den,
             theta_dot,
             (-3*m2*l*theta_dot**2*np.sin(theta)*np.cos(theta)-6*(m1+m2)*g*np.sin(theta)-6*(u[0,0]-b*x_dot)*np.cos(theta))/(l*den)]).reshape(-1,1)
-    print(f"dy_dt: {dydt.T}")
+    # print(f"dy_dt: {dydt.T}")
     new_state = y + dydt * dt
     new_state_clipped = np.array([ new_state[0,0], new_state[1,0], wrap_angle(new_state[2,0]), new_state[3,0] ]).reshape(-1,1)
 
-    return new_state_clipped
+    return new_state
+
+def rk4_integration(y, u, dt):
+    k1 = dt * ( state_dot( y, u ) )
+    k2 = dt * ( state_dot( y + k1/2.0, u ) )
+    k3 = dt * ( state_dot( y + k2/2.0, u ) )
+    k4 = dt * ( state_dot( y + k3, u ) )
+    k = ( k1 + 2*k2 + 3*k3 + k4 ) / 6.0
+    new_state = y + k
+    return np.array([ new_state[0,0], new_state[1,0], wrap_angle(new_state[2,0]), new_state[3,0] ]).reshape(-1,1)
 
 def step_using_xdot(state, state_dot, dt):
      state_next = state + state_dot * dt

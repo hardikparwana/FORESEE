@@ -13,11 +13,12 @@ def random_exploration( key, input_dim=1, u_max = 10 ):
     rand_u = u_max*(2*random.uniform( subkey, shape=( input_dim, 1 )) -1 )
     return rand_u[0,0]
 
-def Sum_of_gaussians_initialize(key, state_dim, input_dim, type = 'gaussian', num_basis = 50, lengthscale = 1, centers_init_min = -1, centers_init_max = 1):
+def Sum_of_gaussians_initialize(key, state_dim, input_dim, type = 'gaussian', u_max = 10, num_basis = 50, lengthscale = 1, centers_init_min = -1, centers_init_max = 1):
         
     if type=='gaussian':
         # without extra angle        
         lengthscales_init = lengthscale* np.ones(state_dim)
+        # lengthscales_init = 0.1 + random.uniform(subkey, shape=(state_dim,))
         log_lengthscales = np.log( lengthscales_init )
     
         key, subkey = random.split(key)
@@ -46,11 +47,13 @@ def Sum_of_gaussians_initialize(key, state_dim, input_dim, type = 'gaussian', nu
         print(f"Incorrect type passed")
         exit(  )
     
-    weights_init = np.ones((input_dim, num_basis))
+    # weights_init = np.ones((input_dim, num_basis))
+    key, subkey = random.split(key)
+    weights_init = u_max* 2 * (random.uniform(subkey, shape=(input_dim, num_basis))-0.5)
     
     return key, np.append( log_lengthscales.reshape(-1,1), np.append( centers_init.reshape(-1,1), weights_init.reshape(-1,1) , axis=0), axis=0 )
     
-def Sum_of_gaussians( state, policy_params, u_max = 1, state_dim = 4, input_dim = 1, num_basis = 2 ):
+def Sum_of_gaussians( state, policy_params, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 2 ):
     log_lengthscales = policy_params[0:state_dim]
     centers = policy_params[state_dim:state_dim+num_basis*state_dim].reshape(state_dim, num_basis)
     weights = policy_params[-input_dim*num_basis:]
@@ -72,8 +75,8 @@ def policy(state, params_policy):
     return Sum_of_gaussians_with_angle( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 50 )
  
 # @jit 
-def random_policy( key ):
-    return random_exploration( key, input_dim=1, u_max = 1 )
+def random_policy( key, u_max = 10 ):
+    return random_exploration( key, input_dim=1, u_max = u_max )
 
 @jit
 def policy_grad( state, params_policy):
@@ -105,4 +108,6 @@ if 0:
     t0 = time.time()
     grads = policy_grad( init_state, params_policy)
     print(f"grad time jit:{time.time()-t0}, grad = {grads}")
+    
+
     

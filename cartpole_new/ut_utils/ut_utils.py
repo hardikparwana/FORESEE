@@ -77,7 +77,7 @@ def get_state_dot_with_gp(state, control, gp_params1, gp_params2, gp_params3, gp
 
 
 @jit
-def sigma_point_expand_with_gp(sigma_points, weights, weights_cov, control, dynamics_params, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
+def sigma_point_expand_with_gp(sigma_points, weights, weights_cov, control, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
    
     n, N = sigma_points.shape   
     # dt_outer = 0  
@@ -132,9 +132,9 @@ def sigma_point_compress( sigma_points, weights, weights_cov ):
 def reward_UT_Mean_Evaluator_basic(sigma_points, weights, weights_cov):
     # return np.sum(sigma_points)
     mu = 0
-    mu = mu + mc_pilco_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
+    mu = mu + compute_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
     for i in range(1, sigma_points.shape[1]):
-        mu = mu + mc_pilco_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
+        mu = mu + compute_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
     return mu
 reward_UT_Mean_Evaluator_basic_jit = jit(reward_UT_Mean_Evaluator_basic)
 reward_UT_Mean_Evaluator_basic_sum = lambda a,b: np.sum(reward_UT_Mean_Evaluator_basic(a,b)[0])
@@ -165,4 +165,5 @@ def mc_pilco_reward(state):
     target_x = 0#target_state[1]
     target_theta = np.pi#  target_state[0]
 
-    return (1-np.exp( -( (np.abs(theta)-target_theta) / lengthscales[0] )**2 - ( (x-target_x)/lengthscales[1] )**2 ) )
+    return ( (np.abs(theta)-target_theta) / lengthscales[0] )**2 + ( (x-target_x)/lengthscales[1] )**2
+    # return (1-np.exp( -( (np.abs(theta)-target_theta) / lengthscales[0] )**2 - ( (x-target_x)/lengthscales[1] )**2 ) )
