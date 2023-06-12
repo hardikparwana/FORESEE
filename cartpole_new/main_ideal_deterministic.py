@@ -78,7 +78,7 @@ state = np.copy(env.get_state())
 # run once
 
 # optimization parameters
-optimize_offline = False
+optimize_offline = True
 use_adam = True
 use_custom_gd = False
 use_jax_scipy = False
