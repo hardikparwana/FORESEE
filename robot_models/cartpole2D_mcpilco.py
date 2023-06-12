@@ -69,5 +69,14 @@ def get_state_dot_noisy(state, action):
 
     X_dot = state_dot(state, action)
     return X_dot, np.zeros((4,4))
+
+def get_state_dot_noisy_rk4(state, action, dt):
+    k1 = dt * ( state_dot( state, action ) )
+    k2 = dt * ( state_dot( state + k1/2.0, action ) )
+    k3 = dt * ( state_dot( state + k2/2.0, action ) )
+    k4 = dt * ( state_dot( state + k3, action ) )
+    X_dot = ( k1 + 2*k2 + 3*k3 + k4 ) / 6.0 / dt
+
+    return X_dot, np.zeros((4,4))
     
 
