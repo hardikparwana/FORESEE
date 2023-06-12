@@ -3,6 +3,7 @@ import jax
 import jax.numpy as np
 from jax import random, grad, jit, lax
 import optax
+import jaxopt
 # jax.config.update("jax_enable_x64", True)
 
 import matplotlib.pyplot as plt
@@ -41,6 +42,7 @@ def get_future_reward(X, params_policy, dt):
         # direct deterministic
         action = policy( states, params_policy ).reshape(-1,1)
         states = step(states, action, dt)
+        # reward = reward + mc_pilco_reward(states)
         reward = reward + compute_reward(states)
         # reward = reward + np.square(states[0,0])
         
@@ -79,10 +81,12 @@ state = np.copy(env.get_state())
 optimize_offline = False
 use_adam = True
 use_custom_gd = False
-n_restarts = 10#100
+use_jax_scipy = False
+n_restarts = 50#100
 iter_adam = 4000
 adam_start_learning_rate = 0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
+#0.005 for compute_reward, grad_clip = 2.0
 
 t0 = time.time()
 reward = get_future_reward( state, params_policy, dt_outer)
@@ -94,12 +98,18 @@ if (optimize_offline):
     #train using scipy ###########################
 
     if use_custom_gd:
-        for i in range(100):
+        for i in range(10000):
             param_policy_grad = get_future_reward_grad( state, params_policy, dt_inner)
-            param_policy_grad = np.clip( param_policy_grad, -2.0, 2.0 )
+            param_policy_grad = np.clip( param_policy_grad, -grad_clip, grad_clip )
             params_policy = params_policy - custom_gd_lr_rate * param_policy_grad
-            params_policy =  np.clip( params_policy, -10, 10 )
+            # params_policy =  np.clip( params_policy, -10, 10 )
         print(f"reward final GD : { get_future_reward( state, params_policy, dt_outer ) }")
+
+    if use_jax_scipy:
+        minimize_function = lambda params: get_future_reward(state, params, dt_outer )
+        solver = jaxopt.ScipyMinimize(fun=minimize_function, maxiter=iter_adam)
+        params_policy, cost_state = solver.run(params_policy)
+        print(f"Jaxopt state: {cost_state}")
 
     if use_adam:
         cost = get_future_reward( state, params_policy, dt_outer )
@@ -114,25 +124,25 @@ if (optimize_offline):
             best_cost_local = np.copy(cost_initial)
             best_params_local = np.copy(params_policy)
 
-            # optimizer = optax.adam(start_learning_rate)
-            # opt_state = optimizer.init(params_policy)
+            optimizer = optax.adam(adam_start_learning_rate)
+            opt_state = optimizer.init(params_policy)
 
-            # Exponential decay of the learning rate.
-            scheduler = optax.exponential_decay(
-                init_value=adam_start_learning_rate, 
-                transition_steps=1000,
-                decay_rate=0.999)
+            # # Exponential decay of the learning rate.
+            # scheduler = optax.exponential_decay(
+            #     init_value=adam_start_learning_rate, 
+            #     transition_steps=1000,
+            #     decay_rate=0.999)
 
-            # Combining gradient transforms using `optax.chain`.
-            gradient_transform = optax.chain(
-                optax.clip_by_global_norm(1.0),  # Clip by the gradient by the global norm.
-                optax.scale_by_adam(),  # Use the updates from adam.
-                optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
-                # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
-                optax.scale(-1.0)
-            )
+            # # Combining gradient transforms using `optax.chain`.
+            # gradient_transform = optax.chain(
+            #     optax.clip_by_global_norm(1.0),  # Clip by the gradient by the global norm.
+            #     optax.scale_by_adam(),  # Use the updates from adam.
+            #     optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
+            #     # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
+            #     optax.scale(-1.0)
+            # )
 
-            opt_state = gradient_transform.init(params_policy)
+            # opt_state = gradient_transform.init(params_policy)
             
             for i in range(iter_adam + 1):
                 t0 = time.time()
@@ -149,8 +159,8 @@ if (optimize_offline):
                 
                 grads = get_future_reward_grad( state, params_policy, dt_outer )
                 
-                # updates, opt_state = optimizer.update(grads, opt_state)
-                updates, opt_state = gradient_transform.update(grads, opt_state)
+                updates, opt_state = optimizer.update(grads, opt_state)
+                # updates, opt_state = gradient_transform.update(grads, opt_state)
                 
                 params_policy = optax.apply_updates(params_policy, updates)
                 # if i%100==0:
@@ -165,22 +175,33 @@ if (optimize_offline):
             np.save(f, best_params)    
 
 action = 0
-# input("Press Enter to continue...")
+input("Press Enter to continue...")
 while t < tf:
 
     if not optimize_offline:
         # tune parameters
+        state_dim = 5
+        num_basis = 200
+        
+        
         reward, param_policy_grad = get_future_reward( state, params_policy, dt_outer ), get_future_reward_grad( state, params_policy, dt_outer )
-        print(f"reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}, action:{action}, params min:{np.min(params_policy)}, max:{np.max(params_policy)}")
+        centers = params_policy[state_dim:state_dim+num_basis*state_dim].reshape(state_dim, num_basis)
+        weights = params_policy[-num_basis:]
+        centers_grad = param_policy_grad[state_dim:state_dim+num_basis*state_dim].reshape(state_dim, num_basis)
+        print(f"reward:{reward}, grad: {np.max(np.abs(param_policy_grad))}, action:{action}, params min:{np.min(params_policy)}, max:{np.max(params_policy)}, weights_max = {np.max(np.abs(weights))}, grad_max:{ np.max(np.abs( centers_grad[3:4,:] )) }")
         param_policy_grad = np.clip( param_policy_grad, -grad_clip, grad_clip )
+        # if np.linalg.norm( param_policy_grad ) > grad_clip * param_policy_grad.size :
+        #     param_policy_grad = param_policy_grad / np.linalg.norm(param_policy_grad) * grad_clip * param_policy_grad.size
         params_policy = params_policy - custom_gd_lr_rate * param_policy_grad
+        
+
         # clip is needed
         # res = minimize( get_future_reward_jit, params_policy, method='BFGS', tol=1e-8, options=dict(maxiter=maxiter) ) #1e-8
         # params_policy = res.x
    
 
     action = policy( state, params_policy ).reshape(-1,1)
-    # print(f"theta:{ state[2,0]*180/np.pi }, input:{ action }, state:{ state.T }")
+    print(f"theta:{ state[2,0]*180/np.pi }, input:{ action }")#, state:{ state.T }")
     next_state = step(state, action, dt_inner)
     env.set_state( (next_state[0,0].item(), next_state[1,0].item(), next_state[2,0].item(), next_state[3,0].item()) )
     env.render()  

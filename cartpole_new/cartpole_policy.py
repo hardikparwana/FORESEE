@@ -13,7 +13,7 @@ def random_exploration( key, input_dim=1, u_max = 10 ):
     rand_u = u_max*(2*random.uniform( subkey, shape=( input_dim, 1 )) -1 )
     return rand_u[0,0]
 
-def Sum_of_gaussians_initialize(key, state_dim, input_dim, type = 'gaussian', u_max = 10, num_basis = 50, lengthscale = 1, centers_init_min = -1, centers_init_max = 1):
+def Sum_of_gaussians_initialize(key, state_dim, input_dim, type = 'gaussian', u_max = 10, num_basis = 200, lengthscale = 1, centers_init_min = -1, centers_init_max = 1):
         
     if type=='gaussian':
         # without extra angle        
@@ -66,19 +66,19 @@ def Sum_of_gaussians( state, policy_params, u_max = 10, state_dim = 4, input_dim
     return squash_inputs( control_input, u_max )
 
 def Sum_of_gaussians_with_angle( state, policy_params, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 2 ):
-    new_state = np.array([ state[0,0], state[1,0], state[3,0], np.sin(state[2,0]), np.cos(state[3,0]) ]).reshape(-1,1)
+    new_state = np.array([ state[0,0], state[1,0], state[3,0], np.sin(state[2,0]), np.cos(state[2,0]) ]).reshape(-1,1)
     return Sum_of_gaussians( new_state, policy_params, u_max = u_max, state_dim = state_dim+1, input_dim = input_dim, num_basis = num_basis )
     
-@jit
+# @jit
 def policy(state, params_policy):
-    # return Sum_of_gaussians( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 50 )
-    return Sum_of_gaussians_with_angle( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 50 )
+    # return Sum_of_gaussians( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
+    return Sum_of_gaussians_with_angle( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
  
 # @jit 
 def random_policy( key, u_max = 10 ):
     return random_exploration( key, input_dim=1, u_max = u_max )
 
-@jit
+# @jit
 def policy_grad( state, params_policy):
     return grad( policy, 1 )(state, params_policy)
 

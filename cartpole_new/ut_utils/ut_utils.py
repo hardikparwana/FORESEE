@@ -165,5 +165,5 @@ def mc_pilco_reward(state):
     target_x = 0#target_state[1]
     target_theta = np.pi#  target_state[0]
 
-    return ( (np.abs(theta)-target_theta) / lengthscales[0] )**2 + ( (x-target_x)/lengthscales[1] )**2
-    # return (1-np.exp( -( (np.abs(theta)-target_theta) / lengthscales[0] )**2 - ( (x-target_x)/lengthscales[1] )**2 ) )
+    # return ( (np.abs(theta)-target_theta) / lengthscales[0] )**2 + ( (x-target_x)/lengthscales[1] )**2
+    return (1-np.exp( -( (np.abs(theta)-target_theta) / lengthscales[0] )**2 - ( (x-target_x)/lengthscales[1] )**2 ) )
