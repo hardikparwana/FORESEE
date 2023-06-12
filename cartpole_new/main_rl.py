@@ -72,7 +72,8 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
         best_cost = np.copy(cost)
         for j in range(n_restarts):
 
-            key, params_policy = Sum_of_gaussians_initialize(key, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
+            if (j>0):
+                key, params_policy = Sum_of_gaussians_initialize(key, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
 
             cost = get_future_reward( state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y )
             cost_initial = np.copy(cost)
@@ -128,7 +129,7 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
             
         with open('new_rl.npy', 'wb') as f:
             np.save(f, best_params)    
-        print(f" *************** NANs? :{np.isnan(params_policy)} ")
+        print(f" *************** NANs? :{np.any(np.isnan(params_policy)==True)} ")
     return key, params_policy
 
 
@@ -144,9 +145,10 @@ policy_type = 'with angles'
 key, params_policy =  Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
 
 t = 0
-dt_inner = 0.02
-dt_outer = 0.02
+dt_inner = 0.05#0.02
+dt_outer = 0.05#0.02
 tf = 3.0#H * dt_outer
+tf_trials = [6.0, 3.0, 3.0, 3.0, 3.0]
 H = int( tf/dt_inner )
 # H = 10
 grad_clip = 2.0
@@ -159,8 +161,8 @@ use_adam = True
 use_custom_gd = False
 use_jax_scipy = False
 n_restarts = 10#50#100
-iter_adam = 4000#4000
-adam_start_learning_rate = 0.05#0.001
+iter_adam = 500#4000
+adam_start_learning_rate = 0.01#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
 
 # RL setup
@@ -194,7 +196,7 @@ for run in range(num_trials):
     
     # Run Policy and collect data
     t = 0
-    while t < tf:
+    while t < tf_trials[run]:
         
         key, subkey  = random.split(key)
         if (random.uniform( subkey ) < random_threshold[run] ):
