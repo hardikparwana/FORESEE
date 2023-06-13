@@ -171,7 +171,7 @@ if (optimize_offline):
         
         params_policy = np.copy(best_params)
             
-        with open('new_ideal.npy', 'wb') as f:
+        with open('new_ideal_deterministic.npy', 'wb') as f:
             np.save(f, best_params)    
 
 action = 0

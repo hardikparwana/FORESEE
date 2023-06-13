@@ -10,12 +10,12 @@ key = random.PRNGKey(2)
 
 def initialize_gp(num_datapoints = 10):
     meanf = jgp.mean_functions.Zero()
-    kernel = jk.RBF()
+    kernel = jk.RBF() * jk.Polynomial()
     prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=num_datapoints )
     posterior = prior * likelihood
     parameter_state = jgp.initialise(
-        posterior, key, kernel={"lengthscale": np.array([0.5])}
+        posterior, key#, kernel={"lengthscale": np.array([0.5])}
     )
     return likelihood, posterior, parameter_state
 
@@ -27,7 +27,7 @@ def train_gp(likelihood, posterior, parameter_state, train_x, train_y):
         objective=negative_mll,
         parameter_state=parameter_state,
         optax_optim=optimiser,
-        num_iters=500,
+        num_iters=1000,
     )
     learned_params, training_history = inference_state.unpack()
     return likelihood, posterior, learned_params, D
@@ -41,7 +41,7 @@ def predict_gp(likelihood, posterior, learned_params, D, test_x):
 
 def predict_with_gp_params(gp_params, train_x, train_y, test_x):
     meanf = jgp.mean_functions.Zero()
-    kernel = jk.RBF()
+    kernel = jk.RBF() * jk.Polynomial()
     prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=train_x.shape[0] )
     posterior = prior * likelihood

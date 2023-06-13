@@ -30,7 +30,8 @@ def get_future_reward(X, params_policy, dt):
         reward, states, weights, weights_cov = inputs    
         mean_position = get_mean( states, weights )
         solution = policy( mean_position, params_policy )
-        next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_rk4( states, weights, weights_cov, solution, dt)
+        # next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_rk4( states, weights, weights_cov, solution, dt)
+        next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_rk4_input( states, weights, weights_cov, params_policy, dt)
         next_states, next_weights, next_weights_cov = sigma_point_compress( next_states_expanded, next_weights_expanded, next_weights_cov_expanded )
         states = next_states
         weights = next_weights

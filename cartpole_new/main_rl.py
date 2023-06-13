@@ -32,7 +32,8 @@ def get_future_reward(X, params_policy, gp_params1, gp_params2, gp_params3, gp_p
         mean_position = get_mean( states, weights )
         solution = policy( mean_position, params_policy )
         # next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_rk4( states, weights, weights_cov, solution, dt_outer)
-        next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_with_gp( states, weights, weights_cov, solution, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
+        # next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_with_gp( states, weights, weights_cov, solution, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
+        next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_with_gp_input( states, weights, weights_cov, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
         next_states, next_weights, next_weights_cov = sigma_point_compress( next_states_expanded, next_weights_expanded, next_weights_cov_expanded )
         states = next_states
         weights = next_weights
@@ -75,7 +76,7 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
             if (j>0):
                 key, params_policy = Sum_of_gaussians_initialize(key, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
 
-            cost = get_future_reward( state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y )
+            cost = get_future_reward( init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y )
             cost_initial = np.copy(cost)
             best_cost_local = np.copy(cost_initial)
             best_params_local = np.copy(params_policy)
@@ -145,10 +146,9 @@ policy_type = 'with angles'
 key, params_policy =  Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
 
 t = 0
-dt_inner = 0.04#0.02
-dt_outer = 0.04#0.02
+dt_inner = 0.03#0.02
+dt_outer = 0.03#0.02
 tf = 3.0#H * dt_outer
-tf_trials = [6.0, 3.0, 3.0, 3.0, 3.0]
 H = int( tf/dt_inner )
 # H = 10
 grad_clip = 2.0
@@ -160,21 +160,24 @@ optimize_offline = True
 use_adam = True
 use_custom_gd = False
 use_jax_scipy = False
-n_restarts = 10#50#100
-iter_adam = 500#4000
-adam_start_learning_rate = 0.01#0.05#0.001
+n_restarts = 3#50#100
+iter_adam = 500#4000#1000
+adam_start_learning_rate = 0.05#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
+
+# sometimes good with adam 1000, time 0.05
 
 # RL setup
 num_trials = 5
-random_threshold = np.array([1.0, 0.5, 0.0, 0.0, 0.0])
+tf_trials = [3.0, 3.0, 3.0, 3.0, 3.0]
+random_threshold = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
 
 # GP setup
 likelihoods = [0]*4
 posteriors = [0]*4
 parameter_states = [0]*4
 learned_params = [0]*4
-Ds = [0]*4
+Ds = [0]*4  
 mus = [0]*4
 stds = [0]*4
 action = policy( state, params_policy ).reshape(-1,1)
@@ -196,8 +199,8 @@ for run in range(num_trials):
     
     # Run Policy and collect data
     t = 0
+    reward_trial = 0
     while t < tf_trials[run]:
-        
         key, subkey  = random.split(key)
         if (random.uniform( subkey ) < random_threshold[run] ):
             key, subkey  = random.split(key)
@@ -205,17 +208,20 @@ for run in range(num_trials):
             print(f"action:{action}")
         else:
             action = policy( state, params_policy ).reshape(-1,1)
+            print(f"action policy:{action}")
         train_x = np.append( train_x, np.append(state.reshape(1,-1), action.reshape(1,-1), axis=1), axis=0 )
         next_state = step(state, action, dt_inner)
         env.set_state( (next_state[0,0].item(), next_state[1,0].item(), next_state[2,0].item(), next_state[3,0].item()) )
         env.render()  
         state = np.copy(next_state)
+        reward_trial = reward_trial + mc_pilco_reward(state)
         train_y = np.append(train_y, next_state.reshape(1,-1), axis=0)
         t = t + dt_inner
+    print(f"Trial reward: {reward_trial}")
               
     # Learn GP
     for i in range(4):
-        if ((i==1) or (i==3)):
+        if 1:#((i==1) or (i==3)):
             likelihoods[i], posteriors[i], parameter_states[i] = initialize_gp(num_datapoints = train_x.shape[0]) 
             likelihoods[i], posteriors[i], learned_params[i], Ds[i] = train_gp( likelihoods[i], posteriors[i], parameter_states[i], train_x[1:,:], train_y[1:,i].reshape(-1,1) )      
     
@@ -223,7 +229,7 @@ for run in range(num_trials):
     plt.ioff()
     fig, ax = plt.subplots(4)
     for i in range(4):
-        if ( (i==1) or (i==3) ):
+        if 1:#( (i==1) or (i==3) ):
             mus[i], stds[i] = predict_gp( likelihoods[i], posteriors[i], learned_params[i], Ds[i], train_x[1:,:] )
             ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i], 'g', label = 'Predicted values')
             ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r', label = 'True values')
@@ -240,3 +246,9 @@ for run in range(num_trials):
 
 
 env.close()
+
+# TODOs
+# 1. smaller time step
+# 2. plot GP prediction vs true state during trial
+# 3. use GP for 1st and 2nd state too. or do RK4 somehow
+#4. more Adam iterations
