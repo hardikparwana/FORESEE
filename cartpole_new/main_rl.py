@@ -145,8 +145,8 @@ policy_type = 'with angles'
 key, params_policy =  Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
 
 t = 0
-dt_inner = 0.05#0.02
-dt_outer = 0.05#0.02
+dt_inner = 0.04#0.02
+dt_outer = 0.04#0.02
 tf = 3.0#H * dt_outer
 tf_trials = [6.0, 3.0, 3.0, 3.0, 3.0]
 H = int( tf/dt_inner )
@@ -167,7 +167,7 @@ custom_gd_lr_rate = 0.005#0.5
 
 # RL setup
 num_trials = 5
-random_threshold = np.array([0.5, 0.0, 0.0, 0.0, 0.0])
+random_threshold = np.array([1.0, 0.5, 0.0, 0.0, 0.0])
 
 # GP setup
 likelihoods = [0]*4
@@ -235,7 +235,7 @@ for run in range(num_trials):
     key, params_policy = train_policy( key, use_custom_gd = use_custom_gd, use_jax_scipy = use_jax_scipy, use_adam = use_adam, adam_start_learning_rate = adam_start_learning_rate, init_state = state_init, params_policy = params_policy, gp_params1 = learned_params[0], gp_params2 = learned_params[1], gp_params3 = learned_params[2], gp_params4 = learned_params[3], gp_train_x = train_x[1:,:], gp_train_y = train_y[1:,:] )
    
     # Evaluate Policy
-    reward = get_future_reward( state, params_policy, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[1:,:], train_y[1:,:] )
+    reward = get_future_reward( state_init, params_policy, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[1:,:], train_y[1:,:] )
     print(f"Run : {run} reward is : {reward}")
 
 
