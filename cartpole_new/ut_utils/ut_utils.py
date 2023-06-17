@@ -73,12 +73,12 @@ def generate_sigma_points_gaussian( mu, cov_root, base_term, factor ):
 @jit
 def get_next_state_with_gp(state, control, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
     test_x = np.append(state.reshape(1,-1), control.reshape(1,-1), axis=1)
-    mu1, var1 = predict_with_gp_params(gp_params1, gp_train_x, gp_train_y[:,0].reshape(-1,1), test_x)
+    # mu1, var1 = predict_with_gp_params(gp_params1, gp_train_x, gp_train_y[:,0].reshape(-1,1), test_x)
     mu2, var2 = predict_with_gp_params(gp_params2, gp_train_x, gp_train_y[:,1].reshape(-1,1), test_x)
     # mu3, var3 = predict_with_gp_params(gp_params3, gp_train_x, gp_train_y[:,2].reshape(-1,1), test_x)
     mu4, var4 = predict_with_gp_params(gp_params4, gp_train_x, gp_train_y[:,3].reshape(-1,1), test_x)
     dt = 0.02
-    # mu1, var1 = np.array([ state[0,0] + dt * state[1,0]  ]), np.array([0.0])
+    mu1, var1 = np.array([ state[0,0] + dt * state[1,0]  ]), np.array([0.0])
     mu3, var3 = np.array([ wrap_angle(state[2,0] + dt * state[3,0])  ]), np.array([0,0])
     return np.concatenate((mu1, mu2, mu3, mu4)).reshape(-1,1), np.diag( np.concatenate( (var1, var2, var3, var4) ) )
 
@@ -216,9 +216,9 @@ def sigma_point_compress( sigma_points, weights, weights_cov ):
 def reward_UT_Mean_Evaluator_basic(sigma_points, weights, weights_cov):
     # return np.sum(sigma_points)
     mu = 0
-    mu = mu + mc_pilco_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
+    mu = mu + compute_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
     for i in range(1, sigma_points.shape[1]):
-        mu = mu + mc_pilco_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
+        mu = mu + compute_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
     return mu
 reward_UT_Mean_Evaluator_basic_jit = jit(reward_UT_Mean_Evaluator_basic)
 reward_UT_Mean_Evaluator_basic_sum = lambda a,b: np.sum(reward_UT_Mean_Evaluator_basic(a,b)[0])

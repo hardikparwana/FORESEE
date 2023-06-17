@@ -135,7 +135,7 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
 
 
 # Set up environment
-exp_name = "cartpole_new_rl_test1"
+exp_name = "cartpole_new_rl_test3"
 env_to_render = CustomCartPoleEnv(render_mode="human")
 env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_sigma_test_ideal" )
 observation, info = env.reset(seed=42)
@@ -146,8 +146,8 @@ policy_type = 'with angles'
 key, params_policy =  Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
 
 t = 0
-dt_inner = 0.03#0.02
-dt_outer = 0.03#0.02
+dt_inner = 0.02#0.02
+dt_outer = 0.02#0.02
 tf = 3.0#H * dt_outer
 H = int( tf/dt_inner )
 # H = 10
@@ -160,8 +160,8 @@ optimize_offline = True
 use_adam = True
 use_custom_gd = False
 use_jax_scipy = False
-n_restarts = 3#50#100
-iter_adam = 500#4000#1000
+n_restarts = 6#50#100
+iter_adam = 1000#4000#1000
 adam_start_learning_rate = 0.05#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
 
