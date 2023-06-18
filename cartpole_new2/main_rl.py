@@ -112,12 +112,14 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
         # print(f"adam first reward: {time.time()-t0}")
         best_params = np.copy(params_policy)
         best_cost = np.copy(cost)
+        costs_adam = []
         for j in range(n_restarts):
-
+            
             if (j>0):
                 key, params_policy = Sum_of_gaussians_initialize(key, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
 
             cost = get_future_reward( init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y )
+            cost_run = [cost]
             cost_initial = np.copy(cost)
             best_cost_local = np.copy(cost_initial)
             best_params_local = np.copy(params_policy)
@@ -145,7 +147,7 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
             for i in range(iter_adam + 1):
                 t0 = time.time()
                 cost = get_future_reward( init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
-                
+                cost_run.append(cost)
                 if (cost<best_cost):
                     best_cost = np.copy(cost)
                     best_params = np.copy(params_policy)
@@ -167,6 +169,7 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
                 #     print(f"i:{i}, cost:{cost}, grad:{np.max(np.abs(grads))}")
 
                 # print(f"time: {time.time()-t0}, cost:{cost}")
+            costs_adam.append( cost_run )
             print(f"run: {j}, cost initial:{cost_initial}, best cost local:{best_cost_local}, cost final:{best_cost}")
         
         params_policy = np.copy(best_params)
@@ -174,11 +177,11 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
         with open('new_rl.npy', 'wb') as f:
             np.save(f, best_params)    
         print(f" *************** NANs? :{np.any(np.isnan(params_policy)==True)} ")
-    return key, params_policy
+    return key, params_policy, costs_adam
 
 
 # Set up environment
-exp_name = "cartpole_new_rl_test3"
+exp_name = "cartpole_new2_rl_test1"
 env_to_render = CustomCartPoleEnv(render_mode="human")
 env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_sigma_test_ideal" )
 observation, info = env.reset(seed=42)
@@ -189,9 +192,9 @@ policy_type = 'with angles'
 key, params_policy =  Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
 
 t = 0
-dt_inner = 0.02#0.02
-dt_outer = 0.02#0.02
-tf = 0.1#3.0#H * dt_outer
+dt_inner = 0.05#0.02
+dt_outer = 0.05#0.02
+tf = 3.0#H * dt_outer
 H = int( tf/dt_inner )
 # H = 10
 grad_clip = 2.0
@@ -212,7 +215,7 @@ custom_gd_lr_rate = 0.005#0.5
 
 # RL setup
 num_trials = 5
-tf_trials = [0.4, 0.4, 3.0, 3.0, 3.0]
+tf_trials = [3.0, 3.0, 3.0, 3.0, 3.0]
 random_threshold = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
 
 # GP setup
@@ -316,7 +319,12 @@ for run in range(num_trials):
     print(f"first reward grad: time: {time.time()-t0}")
     
     # Train policy
-    key, params_policy = train_policy( key, use_custom_gd = use_custom_gd, use_jax_scipy = use_jax_scipy, use_adam = use_adam, adam_start_learning_rate = adam_start_learning_rate, init_state = state_init, params_policy = params_policy, gp_params1 = learned_params[0], gp_params2 = learned_params[1], gp_params3 = learned_params[2], gp_params4 = learned_params[3], gp_train_x = train_x[1:,:], gp_train_y = train_y[1:,:] )
+    key, params_policy, costs_adam = train_policy( key, use_custom_gd = use_custom_gd, use_jax_scipy = use_jax_scipy, use_adam = use_adam, adam_start_learning_rate = adam_start_learning_rate, init_state = state_init, params_policy = params_policy, gp_params1 = learned_params[0], gp_params2 = learned_params[1], gp_params3 = learned_params[2], gp_params4 = learned_params[3], gp_train_x = train_x[1:,:], gp_train_y = train_y[1:,:] )
+    fig, ax = plt.subplots(n_restarts)
+    for i in range(n_restarts):
+        ax[i].plot( costs_adam[i] )
+    plt.savefig(exp_name + "adam_loss_iter_"+str(run)+".png")
+    
    
     # Evaluate Policy
     reward = get_future_reward( state_init, params_policy, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[1:,:], train_y[1:,:] )
