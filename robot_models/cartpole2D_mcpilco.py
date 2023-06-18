@@ -29,6 +29,13 @@ def step(y, u, dt):
 
     return new_state
 
+def get_next_states_from_dynamics(states, controls, dt):
+    new_states = rk4_integration( states[:,0].reshape(-1,1), controls[:,0].reshape(-1,1), dt )
+    for i in range(1,states.shape[1]):
+        new_states = np.append( new_states, rk4_integration( states[:,i].reshape(-1,1), controls[:,i].reshape(-1,1), dt ), axis=1 )
+    return new_states
+    
+
 def rk4_integration(y, u, dt):
     k1 = dt * ( state_dot( y, u ) )
     k2 = dt * ( state_dot( y + k1/2.0, u ) )

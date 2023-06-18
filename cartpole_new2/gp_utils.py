@@ -39,7 +39,17 @@ def predict_gp(likelihood, posterior, learned_params, D, test_x):
     predictive_std = predictive_dist.stddev()
     return predictive_mean, predictive_std
 
-def initialize_gp_pred(gp_params, train_x, train_y):
+def initialize_gp_prediction_distribution(gp_params, train_x, train_y):
+    meanf = jgp.mean_functions.Zero()
+    kernel = jk.RBF() * jk.Polynomial()
+    prior = jgp.Prior(mean_function=meanf, kernel = kernel)
+    likelihood = jgp.Gaussian( num_datapoints=train_x.shape[0] )
+    posterior = prior * likelihood
+    D = Dataset(X=train_x, y=train_y)
+    latent_dist = posterior(gp_params, D)
+    return latent_dist
+
+def initialize_gp_prediction(gp_params, train_x, train_y):
     meanf = jgp.mean_functions.Zero()
     kernel = jk.RBF() * jk.Polynomial()
     prior = jgp.Prior(mean_function=meanf, kernel = kernel)
