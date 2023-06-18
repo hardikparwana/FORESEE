@@ -76,8 +76,8 @@ def Sum_of_gaussians_with_angle9( state, policy_params, u_max = 10, state_dim = 
     
 # @jit
 def policy9(state, params_policy):
-    return Sum_of_gaussians9( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
-    # return Sum_of_gaussians_with_angle( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
+    # return Sum_of_gaussians9( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
+    return Sum_of_gaussians_with_angle9( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
     
 def Sum_of_gaussians( state, policy_params, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 2 ):
     log_lengthscales = policy_params[0:state_dim]
@@ -97,8 +97,8 @@ def Sum_of_gaussians_with_angle( state, policy_params, u_max = 10, state_dim = 4
     
 # @jit
 def policy(state, params_policy):
-    return Sum_of_gaussians( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
-    # return Sum_of_gaussians_with_angle( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
+    # return Sum_of_gaussians( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
+    return Sum_of_gaussians_with_angle( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
  
 # @jit 
 def random_policy( key, u_max = 10 ):
@@ -111,7 +111,7 @@ def policy_grad( state, params_policy):
 # policy_grad = jit(grad(policy, 1))
 # policy_grad_jit = jit(grad(policy))
 
-if 1:
+if 0:
     print("Testing Cart Pole Policy")
     key = random.PRNGKey(0)
     key, subkey = random.split(key)

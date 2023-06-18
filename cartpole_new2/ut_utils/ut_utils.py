@@ -1,8 +1,8 @@
 import jax.numpy as np
 from jax import jit, lax
 from robot_models.cartpole2D_mcpilco import get_state_dot_noisy, step_using_xdot, get_state_dot_noisy_rk4
-from cartpole_new.gp_utils import predict_with_gp_params
-from cartpole_new.cartpole_policy import policy
+from cartpole_new2.gp_utils import predict_with_gp_params
+from cartpole_new2.cartpole_policy import policy
 from utils.utils import wrap_angle
 
 @jit
@@ -84,18 +84,18 @@ def get_next_state_with_gp(state, control, gp_params1, gp_params2, gp_params3, g
 
 def get_next_states_with_gp( states, control_inputs, gps ):
     test_x = np.append( states, control_inputs.reshape(1,-1), axis=0 ).T
-    # dt = 0.02
+    dt = 0.05
     
-    pred1 = gps[0](test_x)
-    mu1, var1 = pred1.mean(), pred1.variance()
-    # mu1, var1 = np.array([ states[0,:] + dt * states[1,:]  ]), np.zeros((1,9))
+    # pred1 = gps[0](test_x)
+    # mu1, var1 = pred1.mean(), pred1.variance()
+    mu1, var1 = np.array([ states[0,:] + dt * states[1,:]  ]), np.zeros((1,9))
     
     pred2 = gps[1](test_x)
     mu2, var2 = pred2.mean(), pred2.variance()
     
-    pred3 = gps[2](test_x)
-    mu3, var3 = pred3.mean(), pred3.variance()
-    # mu3, var3 = np.array([ wrap_angle(states[2,:] + dt * states[3,:])  ]), np.zeros((1,9))
+    # pred3 = gps[2](test_x)
+    # mu3, var3 = pred3.mean(), pred3.variance()
+    mu3, var3 = np.array([ wrap_angle(states[2,:] + dt * states[3,:])  ]), np.zeros((1,9))
     
     pred4 = gps[3](test_x)
     mu4, var4 = pred4.mean(), pred4.variance()
