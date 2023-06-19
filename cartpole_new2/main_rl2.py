@@ -20,8 +20,6 @@ from robot_models.custom_cartpole_mc_pilco import CustomCartPoleEnv
 from robot_models.cartpole2D_mcpilco import step, get_next_states_from_dynamics
 from cartpole_new2.gym_wrappers.record_video import RecordVideo
 
-
-
 key = random.PRNGKey(2)
 
 @jit
@@ -64,7 +62,7 @@ def get_future_reward_for_compare(X, params_policy, gp_params1, gp_params2, gp_p
     
     for i in range(H):
         control_inputs = policy9( states, params_policy )
-        print(f"  prediction: action: {control_inputs[0,0]}, state: {states[:,0]}")
+        # print(f"  prediction: action: {control_inputs[0,0]}, state: {states[:,0]}")
         next_states_mean, next_states_cov = get_next_states_with_gp( states, control_inputs, [gp0, gp1, gp2, gp3] )
      
         # # find smallest dist:
@@ -134,25 +132,25 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
             best_cost_local = np.copy(cost_initial)
             best_params_local = np.copy(params_policy)
 
-            optimizer = optax.adam(adam_start_learning_rate)
-            opt_state = optimizer.init(params_policy)
+            # optimizer = optax.adam(adam_start_learning_rate)
+            # opt_state = optimizer.init(params_policy)
 
-            # # Exponential decay of the learning rate.
-            # scheduler = optax.exponential_decay(
-            #     init_value=adam_start_learning_rate, 
-            #     transition_steps=1000,
-            #     decay_rate=0.999)
+            # Exponential decay of the learning rate.
+            scheduler = optax.exponential_decay(
+                init_value=adam_start_learning_rate, 
+                transition_steps=200,
+                decay_rate=0.95)
 
-            # # Combining gradient transforms using `optax.chain`.
-            # gradient_transform = optax.chain(
-            #     optax.clip_by_global_norm(1.0),  # Clip by the gradient by the global norm.
-            #     optax.scale_by_adam(),  # Use the updates from adam.
-            #     optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
-            #     # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
-            #     optax.scale(-1.0)
-            # )
+            # Combining gradient transforms using `optax.chain`.
+            gradient_transform = optax.chain(
+                optax.clip_by_global_norm(1.0),  # Clip by the gradient by the global norm.
+                optax.scale_by_adam(),  # Use the updates from adam.
+                optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
+                # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
+                optax.scale(-1.0)
+            )
 
-            # opt_state = gradient_transform.init(params_policy)
+            opt_state = gradient_transform.init(params_policy)
             
             for i in range(iter_adam + 1):
                 t0 = time.time()
@@ -171,8 +169,8 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
                 grads = get_future_reward_grad( init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
                 # print(f"adam first grad: {time.time()-t0}")
                 
-                updates, opt_state = optimizer.update(grads, opt_state)
-                # updates, opt_state = gradient_transform.update(grads, opt_state)
+                # updates, opt_state = optimizer.update(grads, opt_state)
+                updates, opt_state = gradient_transform.update(grads, opt_state)
                 
                 params_policy = optax.apply_updates(params_policy, updates)
                 # if i%100==0:
@@ -191,7 +189,7 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
 
 
 # Set up environment
-exp_name = "cartpole_new2_rl2_test2_lr005_adamiter2000"
+exp_name = "cartpole_new2_rl2_test2_nrestarts15_lr001_adamiter600_decay200_095"
 env_to_render = CustomCartPoleEnv(render_mode="human")
 env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_sigma_test_ideal" )
 observation, info = env.reset(seed=42)
@@ -216,9 +214,9 @@ optimize_offline = True
 use_adam = True
 use_custom_gd = False
 use_jax_scipy = False
-n_restarts = 6#50#100
-iter_adam = 2000#4000#1000
-adam_start_learning_rate = 0.005#0.05#0.001
+n_restarts = 15#50#100
+iter_adam = 1500#4000#1000
+adam_start_learning_rate = 0.001#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
 
 # sometimes good with adam 1000, time 0.05
@@ -226,7 +224,7 @@ custom_gd_lr_rate = 0.005#0.5
 # RL setup
 num_trials = 5
 tf_trials = [3.0, 3.0, 3.0, 3.0, 3.0]
-random_threshold = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+random_threshold = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
 
 # GP setup
 likelihoods = [0]*4

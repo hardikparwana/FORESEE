@@ -62,13 +62,21 @@ def get_future_reward_for_compare(X, params_policy, gp_params1, gp_params2, gp_p
     
     for i in range(H):
         control_inputs = policy9( states, params_policy )
+        # print(f"  prediction: action: {control_inputs[0,0]}, state: {states[:,0]}")
         next_states_mean, next_states_cov = get_next_states_with_gp( states, control_inputs, [gp0, gp1, gp2, gp3] )
+     
+        # # find smallest dist:
+        # test_x = np.append( states, control_inputs.reshape(1,-1), axis=0 ).T
+        # for j in range(9):
+        #     diff = gp_train_x - test_x[j,:].reshape(1,-1)
+        #     dist = np.min( np.linalg.norm(diff, axis=1)  )
+        #     print(f" dist:{dist}, cov:{ next_states_cov[3,j] }, diff:{diff[:,0]} ")        
                 
         new_states_true = np.append( new_states_true, get_next_states_from_dynamics(states, control_inputs, dt_outer) , axis=1 )
         predicted_states_mus = np.append( predicted_states_mus, next_states_mean, axis=1 )
         predicted_states_covs = np.append( predicted_states_covs, next_states_cov, axis=1 )
         
-        next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_with_mean_cov( next_states_mean, next_states_cov, weights, weights_cov)
+        next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_with_mean_cov( next_states_mean, next_states_cov*0, weights, weights_cov)
         next_states, next_weights, next_weights_cov = sigma_point_compress( next_states_expanded, next_weights_expanded, next_weights_cov_expanded )
         states = next_states
         weights = next_weights
@@ -124,25 +132,25 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
             best_cost_local = np.copy(cost_initial)
             best_params_local = np.copy(params_policy)
 
-            optimizer = optax.adam(adam_start_learning_rate)
-            opt_state = optimizer.init(params_policy)
+            # optimizer = optax.adam(adam_start_learning_rate)
+            # opt_state = optimizer.init(params_policy)
 
-            # # Exponential decay of the learning rate.
-            # scheduler = optax.exponential_decay(
-            #     init_value=adam_start_learning_rate, 
-            #     transition_steps=1000,
-            #     decay_rate=0.999)
+            # Exponential decay of the learning rate.
+            scheduler = optax.exponential_decay(
+                init_value=adam_start_learning_rate, 
+                transition_steps=200,
+                decay_rate=0.95)
 
-            # # Combining gradient transforms using `optax.chain`.
-            # gradient_transform = optax.chain(
-            #     optax.clip_by_global_norm(1.0),  # Clip by the gradient by the global norm.
-            #     optax.scale_by_adam(),  # Use the updates from adam.
-            #     optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
-            #     # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
-            #     optax.scale(-1.0)
-            # )
+            # Combining gradient transforms using `optax.chain`.
+            gradient_transform = optax.chain(
+                optax.clip_by_global_norm(1.0),  # Clip by the gradient by the global norm.
+                optax.scale_by_adam(),  # Use the updates from adam.
+                optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
+                # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
+                optax.scale(-1.0)
+            )
 
-            # opt_state = gradient_transform.init(params_policy)
+            opt_state = gradient_transform.init(params_policy)
             
             for i in range(iter_adam + 1):
                 t0 = time.time()
@@ -161,8 +169,8 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
                 grads = get_future_reward_grad( init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
                 # print(f"adam first grad: {time.time()-t0}")
                 
-                updates, opt_state = optimizer.update(grads, opt_state)
-                # updates, opt_state = gradient_transform.update(grads, opt_state)
+                # updates, opt_state = optimizer.update(grads, opt_state)
+                updates, opt_state = gradient_transform.update(grads, opt_state)
                 
                 params_policy = optax.apply_updates(params_policy, updates)
                 # if i%100==0:
@@ -181,7 +189,7 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
 
 
 # Set up environment
-exp_name = "cartpole_new2_rl_test1"
+exp_name = "cartpole_new2_testagain_rl1_nrestarts5_lr05_adamiter2000_decay200_095"
 env_to_render = CustomCartPoleEnv(render_mode="human")
 env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_sigma_test_ideal" )
 observation, info = env.reset(seed=42)
@@ -190,7 +198,7 @@ key = random.PRNGKey(100)
 key, subkey = random.split(key)
 policy_type = 'with angles'
 key, params_policy =  Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
-
+action = policy( np.array([0,0,0.1,0]).reshape(-1,1), params_policy ).reshape(-1,1)
 t = 0
 dt_inner = 0.05#0.02
 dt_outer = 0.05#0.02
@@ -206,8 +214,8 @@ optimize_offline = True
 use_adam = True
 use_custom_gd = False
 use_jax_scipy = False
-n_restarts = 6#50#100
-iter_adam = 1000#4000#1000
+n_restarts = 5#50#100
+iter_adam = 2000#4000#1000
 adam_start_learning_rate = 0.05#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
 
@@ -226,6 +234,8 @@ learned_params = [0]*4
 Ds = [0]*4  
 mus = [0]*4
 stds = [0]*4
+mus2 = [0]*4
+stds2 = [0]*4
 action = policy( state, params_policy ).reshape(-1,1)
 train_x = np.append(np.copy(state).reshape(1,-1), action.reshape(1,-1), axis=1)
 train_y = np.copy(state).reshape(1,-1)
@@ -255,7 +265,7 @@ for run in range(num_trials):
             print(f"action:{action}")
         else:
             action = policy( state, params_policy ).reshape(-1,1)
-            print(f"action policy:{action}")
+            print(f"action policy:{action}, state:{state.T}")
             
         next_state = step(state, action, dt_inner)
         env.set_state( (next_state[0,0].item(), next_state[1,0].item(), next_state[2,0].item(), next_state[3,0].item()) )
@@ -274,10 +284,15 @@ for run in range(num_trials):
         fig, ax = plt.subplots(4)
         for i in range(4):
             if 1:#( (i==1) or (i==3) ):
-                mus[i], stds[i] = predict_gp( likelihoods[i], posteriors[i], learned_params[i], Ds[i], train_x[1:,:] )
+                gp_temp = initialize_gp_prediction( learned_params[i], train_x[1:,:], train_y[1:,i].reshape(-1,1) )
+                pred_temp = gp_temp(train_x[1:,:])
+                mus[i], stds[i] = pred_temp.mean(), np.sqrt(pred_temp.variance())
+                mus2[i], stds2[i] = predict_gp( likelihoods[i], posteriors[i], learned_params[i], Ds[i], train_x[1:,:] )
                 ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i], 'g', label = 'Predicted values')
-                ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r', label = 'True values')
-                ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i] - 2* stds[i], mus[i] + 2* stds[i], alpha = 0.2, color="tab:blue", linewidth=1)
+                ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus2[i], 'c', label = '2nd Predicted values')
+                ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r--', label = 'True values')
+                ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i] - 2* stds[i], mus[i] + 2* stds[i], alpha = 0.2, color="tab:orange", linewidth=1)
+                ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus2[i] - 2* stds2[i], mus2[i] + 2* stds2[i], alpha = 0.2, color="tab:green", linewidth=1)
                 ax[i].legend()
         plt.savefig(exp_name + "run_plot_gp_iter_"+str(run)+".png")
               
@@ -292,21 +307,27 @@ for run in range(num_trials):
     fig, ax = plt.subplots(4)
     for i in range(4):
         if 1:#( (i==1) or (i==3) ):
-            mus[i], stds[i] = predict_gp( likelihoods[i], posteriors[i], learned_params[i], Ds[i], train_x[1:,:] )
+            gp_temp = initialize_gp_prediction( learned_params[i], train_x[1:,:], train_y[1:,i].reshape(-1,1) )
+            pred_temp = gp_temp(train_x[1:,:])
+            mus[i], stds[i] = pred_temp.mean(), np.sqrt(pred_temp.variance())
+            mus2[i], stds2[i] = predict_gp( likelihoods[i], posteriors[i], learned_params[i], Ds[i], train_x[1:,:] )
             ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i], 'g', label = 'Predicted values')
-            ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r', label = 'True values')
-            ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i] - 2* stds[i], mus[i] + 2* stds[i], alpha = 0.2, color="tab:blue", linewidth=1)
+            ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus2[i], 'c', label = '2nd Predicted values')
+            ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r--', label = 'True values')
+            ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i] - 2* stds[i], mus[i] + 2* stds[i], alpha = 0.2, color="tab:orange", linewidth=1)
+            ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus2[i] - 2* stds2[i], mus2[i] + 2* stds2[i], alpha = 0.2, color="tab:green", linewidth=1)
             ax[i].legend()
     plt.savefig(exp_name + "plot_gp_iter_"+str(run)+".png")
     
     t0 = time.time()
     reward, pred_states_true,pred_states_mus,pred_states_covs = get_future_reward_for_compare( state_init, params_policy, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[1:,:], train_y[1:,:] )
     print(f"first compare reward: {reward}, time: {time.time()-t0}")
+    print(f"covariances in prediction: max:{np.max(np.abs(pred_states_covs))}")#, values: { pred_states_covs }")
     
     fig, ax = plt.subplots(4)
     for i in range(4):
         ax[i].plot(np.linspace(0, pred_states_true.shape[1], pred_states_true.shape[1]), pred_states_mus[i,:], 'g', label = 'Predicted values')
-        ax[i].plot(np.linspace(0, pred_states_true.shape[1], pred_states_true.shape[1]), pred_states_true[i,:], 'r', label = 'True values')
+        ax[i].plot(np.linspace(0, pred_states_true.shape[1], pred_states_true.shape[1]), pred_states_true[i,:], 'r--', label = 'True values')
         ax[i].fill_between(np.linspace(0, pred_states_true.shape[1], pred_states_true.shape[1]), pred_states_mus[i,:] - 2* pred_states_covs[i,:], pred_states_mus[i,:] + 2* pred_states_covs[i,:], alpha = 0.2, color="tab:blue", linewidth=1)
         ax[i].legend()
     plt.savefig(exp_name + "predicted_plot_gp_iter_"+str(run)+".png")
