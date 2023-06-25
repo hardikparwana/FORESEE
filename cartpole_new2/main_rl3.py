@@ -134,16 +134,17 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
             best_params_local = np.copy(params_policy)
 
             if run==0:
-                lr_rate = adam_start_learning_rates[0]
+                lr_rate = adam_new_start_learning_rates[0]
             else:
                 if j==0:
-                    lr_rate = adam_start_learning_rates[1]
+                    lr_rate = adam_old_start_learning_rates[1]
                 else:
-                    lr_rate = adam_start_learning_rates[0]
+                    lr_rate = adam_new_start_learning_rates[0]
             # if j==0:
             #     lr_rate = adam_start_learning_rates[0]
             # else:
             #     lr_rate = adam_start_learning_rates[1]
+            
             # if run > 0: 
             #     lr_rate = adam_start_learning_rates[1]
             
@@ -180,7 +181,7 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
                 # if ((i>200)) and (run>0):# and (reset > horizon)):
                 #     if cost > cost_run[-1]+0.01:
                 if i==100:
-                        lr_rate = adam_start_learning_rates[1]
+                        lr_rate = adam_new_start_learning_rates[1]
                     # moving_average_cost_improvement = np.sum(  np.asarray(cost_run[-horizon:]) - np.asarray(cost_run[-horizon-1:-1])  )
                     # if moving_average_cost_improvement > 0: # bad learning rate
                         reset = 0
@@ -262,7 +263,8 @@ iters_adam = [3000, 4000, 4000, 4000, 4000]
 adam_start_learning_rate = 0.02#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
 
-adam_start_learning_rates = [0.05, 0.001]
+adam_new_start_learning_rates = [0.05, 0.001]
+adam_old_start_learning_rates = [0.01, 0.001]
 
 # sometimes good with adam 1000, time 0.05
 
