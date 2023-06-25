@@ -1,4 +1,5 @@
 import jax.numpy as np
+import jax
 from utils.utils import wrap_angle
 
 def step(y, u, dt):
@@ -68,14 +69,20 @@ def state_dot( y, u ):
     return dydt
     
 def get_state_dot_noisy(state, action):
-    # X_dot = state_dot(state, action, params)
-    # error_square = 0.01 + np.square(X_dot) # /2  #never let it be 0!!!!
-    # cov = np.diag( error_square[:,0] )
-    # X_dot = X_dot + X_dot/2 #X_dot = X_dot + X_dot/6
-    # return X_dot, cov
+    X_dot = state_dot(state, action)
+    error_square = 0.01 + np.square(X_dot) # /2  #never let it be 0!!!!
+    cov = np.diag( error_square[:,0] )
+    X_dot = X_dot + X_dot/2 #X_dot = X_dot + X_dot/6
+    return X_dot, cov
 
     X_dot = state_dot(state, action)
     return X_dot, np.zeros((4,4))
+
+def get_state_dot_noisy_mc(state, action, key):
+    mu, cov = get_state_dot_noisy(state, action)
+    key, subkey = jax.random.split(key)
+    rnd1 = jax.random.normal( subkey, shape = (4,1) )
+    return mu + np.sqrt( cov )@ rnd1, key
 
 def get_state_dot_noisy_rk4(state, action, dt):
     k1 = dt * ( state_dot( state, action ) )

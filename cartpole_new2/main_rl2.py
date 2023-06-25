@@ -189,7 +189,7 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
 
 
 # Set up environment
-exp_name = "cartpole_new2_rl2_test2_nrestarts15_lr001_adamiter600_decay200_095"
+exp_name = "cartpole_new2_rl2_test4_nrestarts15_lr001_adamiter600_decay200_095"
 env_to_render = CustomCartPoleEnv(render_mode="human")
 env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_sigma_test_ideal" )
 observation, info = env.reset(seed=42)

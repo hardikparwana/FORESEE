@@ -5,6 +5,8 @@ from cartpole_new2.gp_utils import predict_with_gp_params
 from cartpole_new2.cartpole_policy import policy
 from utils.utils import wrap_angle
 
+#check get_ut_cov_root_diagonal
+
 @jit
 def get_mean( sigma_points, weights ):
     weighted_points = sigma_points * weights[0]
@@ -26,7 +28,7 @@ def get_mean_cov(sigma_points, weights, weights_cov):
 
 @jit
 def get_ut_cov_root_diagonal(cov):
-    offset = 0.00000001 # TODOs set offset so that it is never zero
+    offset = 0.0000000001 # TODOs set offset so that it is never zero
     root0 = np.sqrt((offset+cov[0,0]))
     root1 = np.sqrt((offset+cov[1,1]))
     root2 = np.sqrt((offset+cov[2,2]))
@@ -44,7 +46,7 @@ def initialize_sigma_points(X):
     weights = np.ones((1,num_points)) * 1.0/( num_points )
     return sigma_points, weights, np.copy(weights)
 
-@jit
+# @jit
 def generate_sigma_points_gaussian( mu, cov_root, base_term, factor ):
     n = mu.shape[0]     
     N = 2*n + 1 # total points
@@ -248,6 +250,56 @@ def sigma_point_expand_rk4_input(sigma_points, weights, weights_cov, params_poli
     return new_points, new_weights, new_weights_cov
 
 @jit
+def sigma_point_expand_rk4_zero_input(sigma_points, weights, weights_cov, params_policy, dt):
+   
+    n, N = sigma_points.shape   
+    # dt_outer = 0  
+    #TODO  
+    control = np.array([[0.0]])
+    mu, cov = get_state_dot_noisy_rk4(sigma_points[:,0].reshape(-1,1), control.reshape(-1,1), dt )
+    root_term = get_ut_cov_root_diagonal(cov) 
+    temp_points, temp_weights1, temp_weights2 = generate_sigma_points_gaussian( mu, root_term, sigma_points[:,0].reshape(-1,1), dt )
+    new_points = np.copy( temp_points )
+    new_weights = ( np.copy( temp_weights1 ) * weights[0,0]).reshape(1,-1)
+    new_weights_cov = ( np.copy( temp_weights2 ) * weights_cov[0,0]).reshape(1,-1)
+        
+    for i in range(1,N):
+        control = np.array([[0.0]])
+        mu, cov = get_state_dot_noisy_rk4(sigma_points[:,i].reshape(-1,1), control.reshape(-1,1), dt )
+        root_term = get_ut_cov_root_diagonal(cov)           
+        temp_points, temp_weights1, temp_weights2 = generate_sigma_points_gaussian( mu, root_term, sigma_points[:,i].reshape(-1,1), dt )
+        new_points = np.append(new_points, temp_points, axis=1 )
+        new_weights = np.append( new_weights, (temp_weights1 * weights[0,i]).reshape(1,-1) , axis=1 )
+        new_weights_cov = np.append( new_weights_cov, (temp_weights2 * weights_cov[0,i]).reshape(1,-1) , axis=1 )
+
+    return new_points, new_weights, new_weights_cov
+
+@jit
+def sigma_point_expand_rk4_zero_input_noisy(sigma_points, weights, weights_cov, params_policy, dt):
+   
+    n, N = sigma_points.shape   
+    # dt_outer = 0  
+    #TODO  
+    control = np.array([[0.0]])
+    mu, cov = get_state_dot_noisy(sigma_points[:,0].reshape(-1,1), control.reshape(-1,1) )
+    root_term = get_ut_cov_root_diagonal(cov) 
+    temp_points, temp_weights1, temp_weights2 = generate_sigma_points_gaussian( mu, root_term, sigma_points[:,0].reshape(-1,1), dt )
+    new_points = np.copy( temp_points )
+    new_weights = ( np.copy( temp_weights1 ) * weights[0,0]).reshape(1,-1)
+    new_weights_cov = ( np.copy( temp_weights2 ) * weights_cov[0,0]).reshape(1,-1)
+        
+    for i in range(1,N):
+        control = np.array([[0.0]])
+        mu, cov = get_state_dot_noisy(sigma_points[:,i].reshape(-1,1), control.reshape(-1,1) )
+        root_term = get_ut_cov_root_diagonal(cov)           
+        temp_points, temp_weights1, temp_weights2 = generate_sigma_points_gaussian( mu, root_term, sigma_points[:,i].reshape(-1,1), dt )
+        new_points = np.append(new_points, temp_points, axis=1 )
+        new_weights = np.append( new_weights, (temp_weights1 * weights[0,i]).reshape(1,-1) , axis=1 )
+        new_weights_cov = np.append( new_weights_cov, (temp_weights2 * weights_cov[0,i]).reshape(1,-1) , axis=1 )
+
+    return new_points, new_weights, new_weights_cov
+
+# @jit
 def sigma_point_compress( sigma_points, weights, weights_cov ):
     mu, cov = get_mean_cov( sigma_points, weights, weights_cov )
     cov_root_term = get_ut_cov_root_diagonal( cov )  
