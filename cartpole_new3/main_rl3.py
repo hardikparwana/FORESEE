@@ -232,7 +232,7 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
 
 
 # Set up environment
-exp_name = "cartpole_new3_rl3_test_gpjaxmod_env"
+exp_name = "cartpole_new3_rl3_test2_new_predict_nrestarts2_lr05_001_adamiter3000_4000_decay200_095"
 env_to_render = CustomCartPoleEnv(render_mode="human")
 env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_sigma_test_ideal" )
 observation, info = env.reset(seed=42)
@@ -263,8 +263,8 @@ iters_adam = [3000, 4000, 4000, 4000, 4000]
 adam_start_learning_rate = 0.02#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
 
-adam_new_start_learning_rates = [0.05, 0.001]
-adam_old_start_learning_rates = [0.01, 0.001]
+adam_new_start_learning_rates = [0.05, 0.001, 0.0005]
+adam_old_start_learning_rates = [0.01, 0.001, 0.0005]
 
 # sometimes good with adam 1000, time 0.05
 
