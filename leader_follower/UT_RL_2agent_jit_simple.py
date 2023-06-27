@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 plt.rcParams.update({'font.size': 10})
+plt.rcParams['text.usetex'] = True
 from tempfile import TemporaryFile
 
 import cvxpy as cp
@@ -66,9 +67,9 @@ def initialize_tensors(follower, leader):
     follower.alpha_torch = torch.tensor(follower.alpha, dtype=torch.float, requires_grad=True)
     follower.k_torch = torch.tensor( follower.k, dtype=torch.float, requires_grad = True )
     
-def compute_A1_b1_tensor(robotsJ, robotsK, robotsJ_state, robotsK_state, t, noise):
+def compute_A1_b1_tensor(robotsJ, robotsK, robotsJ_state, robotsK_state, t, noise, control_leader_predict_function = []):
     
-    x_dot_k_mean, x_dot_k_cov = traced_leader_predict_jit( t, noise )
+    x_dot_k_mean, x_dot_k_cov = control_leader_predict_function( t, noise ) #traced_leader_predict_jit
     # print(f"gp mean: { x_dot_k_mean }, actual_last_xdot: {robotsK.Xdots[:,-1]}")
         
     x_dot_k = x_dot_k_mean.T.reshape(-1,1) #+ cov terms??     
@@ -79,7 +80,7 @@ def compute_A1_b1_tensor(robotsJ, robotsK, robotsJ_state, robotsK_state, t, nois
 first_run = True
 first_generate_sigma_run = True
     
-def get_future_reward( follower, leader, t = 0, noise = torch.tensor(0), enforce_input_constraints = False ):
+def get_future_reward( follower, leader, t = 0, noise = torch.tensor(0), enforce_input_constraints = False, leader_predict_function = traced_sigma_point_expand_JIT  ):
     # Initialize sigma points for other robots
     follower_states = [torch.clone(follower.X_torch)]        
     prior_leader_states, prior_leader_weights = initialize_sigma_points2_JIT(leader.X_torch)
@@ -94,8 +95,8 @@ def get_future_reward( follower, leader, t = 0, noise = torch.tensor(0), enforce
     
     for i in range(H):       
         
-        # t0 = time.time()
-        leader_xdot_states, leader_xdot_weights = traced_sigma_point_expand_JIT( follower_states[i], leader_states[i], leader_weights[i], torch.tensor(tp), noise )
+        # t0 = time.time()leader_predict_function
+        leader_xdot_states, leader_xdot_weights = leader_predict_function( follower_states[i], leader_states[i], leader_weights[i], torch.tensor(tp), noise ) #traced_sigma_point_expand_JIT
         # print(f"Time 1: {time.time()-t0}")
         
         # t0 = time.time()
@@ -255,7 +256,7 @@ def constrained_update( objective, maintain_constraints, improve_constraints, pa
     
 
 
-def simulate_scenario(movie_name = 'test.mp4', adapt = False, noise = 0.1, enforce_input_constraints = False):
+def simulate_scenario(movie_name = 'test.mp4', adapt = False, noise = 0.1, enforce_input_constraints = False, leader_predict_function = traced_sigma_point_expand_JIT, control_leader_predict_function = [] ):
 
     t = 0
     first_time = True
@@ -293,7 +294,7 @@ def simulate_scenario(movie_name = 'test.mp4', adapt = False, noise = 0.1, enfor
                 # implement controller
                 initialize_tensors(follower, leader)
                 u_ref = unicycle_nominal_input_tensor_jit( follower.X_torch, leader.X_torch )
-                A, B = compute_A1_b1_tensor( follower, leader, follower.X_torch, leader.X_torch, torch.tensor(t), torch.tensor(noise) )
+                A, B = compute_A1_b1_tensor( follower, leader, follower.X_torch, leader.X_torch, torch.tensor(t), torch.tensor(noise), control_leader_predict_function = control_leader_predict_function )
                 
                 solution, deltas = cbf_controller_layer( u_ref, A, B )
                 if np.any( deltas.detach().numpy() > 0.01 ) and enforce_input_constraints:
@@ -321,7 +322,7 @@ def simulate_scenario(movie_name = 'test.mp4', adapt = False, noise = 0.1, enfor
                     
                     success = False
                     while not success:
-                        maintain_constraints, improve_constraints, success, reward = get_future_reward( follower, leader, t = t, noise = torch.tensor(noise), enforce_input_constraints = enforce_input_constraints)                    
+                        maintain_constraints, improve_constraints, success, reward = get_future_reward( follower, leader, t = t, noise = torch.tensor(noise), enforce_input_constraints = enforce_input_constraints, leader_predict_function = leader_predict_function, )                    
                         grads = constrained_update( reward, maintain_constraints, improve_constraints, [follower.k_torch, follower.alpha_torch] )
                         
                         grads = np.clip( grads, -2.0, 2.0 )
@@ -346,12 +347,25 @@ def simulate_scenario(movie_name = 'test.mp4', adapt = False, noise = 0.1, enfor
 noise  = 1.0 #0.5
 save_plot = True
 
-fig1, ax1, follower1, leader1, rewards1 = simulate_scenario( movie_name = 'no_bound_no_adapt.mp4', adapt = False, noise = 0.0, enforce_input_constraints=False )  
-fig2, ax2, follower2, leader2, rewards2 = simulate_scenario( movie_name = 'adapt_no_bound.mp4', adapt = True, noise = 0.0, enforce_input_constraints=False )  
-fig3, ax3, follower3, leader3, rewards3 = simulate_scenario( movie_name = 'no_adapt_with_bound.mp4', adapt = False, noise = 0.0, enforce_input_constraints=True )
-fig4, ax4, follower4, leader4, rewards4 = simulate_scenario( movie_name = 'adapt_with_bound.mp4', adapt = True, noise = 0.0, enforce_input_constraints=True )
+fig1, ax1, follower1, leader1, rewards1 = simulate_scenario( movie_name = 'cs2_noise_no_bound_no_adapt.mp4', adapt = False, noise = 0.0, enforce_input_constraints=False, leader_predict_function = traced_sigma_point_expand_JIT, control_leader_predict_function = traced_leader_predict_jit )  
+fig2, ax2, follower2, leader2, rewards2 = simulate_scenario( movie_name = 'cs2_noise_adapt_no_bound.mp4', adapt = True, noise = 0.0, enforce_input_constraints=False, leader_predict_function = traced_sigma_point_expand_JIT, control_leader_predict_function = traced_leader_predict_jit )  
+fig3, ax3, follower3, leader3, rewards3 = simulate_scenario( movie_name = 'cs2_noise_no_adapt_with_bound.mp4', adapt = False, noise = 0.0, enforce_input_constraints=True, leader_predict_function = traced_sigma_point_expand_JIT, control_leader_predict_function = traced_leader_predict_jit )
+fig4, ax4, follower4, leader4, rewards4 = simulate_scenario( movie_name = 'cs2_noise_adapt_with_bound.mp4', adapt = True, noise = 0.0, enforce_input_constraints=True, leader_predict_function = traced_sigma_point_expand_JIT, control_leader_predict_function = traced_leader_predict_jit )
+
+fig5, ax5, follower5, leader5, rewards5 = simulate_scenario( movie_name = 'cs2_ideal_no_bound_no_adapt.mp4', adapt = False, noise = 0.0, enforce_input_constraints=False, leader_predict_function = traced_sigma_point_expand_ideal_JIT, control_leader_predict_function = traced_leader_predict_ideal_jit )  
+fig6, ax6, follower6, leader6, rewards6 = simulate_scenario( movie_name = 'cs2_ideal_adapt_no_bound.mp4', adapt = True, noise = 0.0, enforce_input_constraints=False, leader_predict_function = traced_sigma_point_expand_ideal_JIT, control_leader_predict_function = traced_leader_predict_ideal_jit )  
+fig7, ax7, follower7, leader7, rewards7 = simulate_scenario( movie_name = 'cs2_ideal_no_adapt_with_bound.mp4', adapt = False, noise = 0.0, enforce_input_constraints=True, leader_predict_function = traced_sigma_point_expand_ideal_JIT, control_leader_predict_function = traced_leader_predict_ideal_jit )
+fig8, ax8, follower8, leader8, rewards8 = simulate_scenario( movie_name = 'cs2_ideal_adapt_with_bound.mp4', adapt = True, noise = 0.0, enforce_input_constraints=True, leader_predict_function = traced_sigma_point_expand_ideal_JIT, control_leader_predict_function = traced_leader_predict_ideal_jit )
+
+fig9, ax9, follower9, leader9, rewards9 = simulate_scenario( movie_name = 'cs2_nominal_no_bound_no_adapt.mp4', adapt = False, noise = 0.0, enforce_input_constraints=False, leader_predict_function = traced_sigma_point_expand_nominal_JIT, control_leader_predict_function = traced_leader_predict_nominal_jit )  
+fig10, ax10, follower10, leader10, rewards10 = simulate_scenario( movie_name = 'cs2_nominal_adapt_no_bound.mp4', adapt = True, noise = 0.0, enforce_input_constraints=False, leader_predict_function = traced_sigma_point_expand_nominal_JIT, control_leader_predict_function = traced_leader_predict_nominal_jit )  
+fig11, ax11, follower11, leader11, rewards11 = simulate_scenario( movie_name = 'cs2_nominal_no_adapt_with_bound.mp4', adapt = False, noise = 0.0, enforce_input_constraints=True, leader_predict_function = traced_sigma_point_expand_nominal_JIT, control_leader_predict_function = traced_leader_predict_nominal_jit )
+fig12, ax12, follower12, leader12, rewards12 = simulate_scenario( movie_name = 'cs2_nominal_adapt_with_bound.mp4', adapt = True, noise = 0.0, enforce_input_constraints=True, leader_predict_function = traced_sigma_point_expand_nominal_JIT, control_leader_predict_function = traced_leader_predict_nominal_jit )
+  
   
 plt.ioff()
+# plt.show()
+# exit()
 
 h11 = []; h21 = []
 h12 = []; h22 = []
@@ -365,72 +379,130 @@ def get_barriers( follower, leader ):
     tp = np.linspace( 0, dt_inner * follower.Xs.shape[1], follower.Xs.shape[1]  )
     return tp, h1s, h2s, h3s
     
-tp1, h11, h12, h13 = get_barriers( follower1, leader1 )    
-tp2, h21, h22, h23 = get_barriers( follower2, leader2 )
-tp3, h31, h32, h33 = get_barriers( follower3, leader3 )
-tp4, h41, h42, h43 = get_barriers( follower4, leader4 )
-    
+# tp1, h11, h12, h13 = get_barriers( follower1, leader1 )    
+# tp2, h21, h22, h23 = get_barriers( follower2, leader2 )
+# tp3, h31, h32, h33 = get_barriers( follower3, leader3 )
+# tp4, h41, h42, h43 = get_barriers( follower4, leader4 )
+# tp5, h51, h52, h53 = get_barriers( follower5, leader5 )    
+# tp6, h61, h62, h63 = get_barriers( follower6, leader6 )
+# tp7, h71, h72, h73 = get_barriers( follower7, leader7 )
+# tp8, h81, h82, h83 = get_barriers( follower8, leader8 )
+# tp9, h91, h92, h93 = get_barriers( follower9, leader9 )    
+# tp10, h101, h102, h103 = get_barriers( follower10, leader10 )
+# tp11, h111, h112, h113 = get_barriers( follower11, leader11 )
+# tp12, h121, h122, h123 = get_barriers( follower12, leader12 )
+
+
+# print(f"rewards1:{rewards12}")
    
 # Plot
 
 print("Plotting now")
 
-figure1, axis1 = plt.subplots( 1 , 1)
-axis1.plot(tp1,h11,'r',label='Unbounded - Fixed', alpha = 0.3)
-axis1.plot(tp2,h21,'r.',label='Unbounded - Adaptive')
-axis1.plot(tp3,h31,'r--',label='Bounded - Fixed')
-axis1.plot(tp4,h41,'r',label='Bounded - Adapt')
+def plot_results(follower1, follower2, follower3, follower4, leader1, leader2, leader3, leader4, rewards1, rewards2, rewards3, rewards4, namespace="noise"):
+    
+    tp1, h11, h12, h13 = get_barriers( follower1, leader1 )    
+    tp2, h21, h22, h23 = get_barriers( follower2, leader2 )
+    tp3, h31, h32, h33 = get_barriers( follower3, leader3 )
+    tp4, h41, h42, h43 = get_barriers( follower4, leader4 )
 
-axis1.plot(tp1,h12,'g',label='Unbounded - Fixed', alpha = 0.3)
-axis1.plot(tp2,h22,'g.',label='Unbounded - Adaptive')
-axis1.plot(tp3,h32,'g--',label='Bounded - Fixed')
-axis1.plot(tp4,h42,'g',label='Bounded - Adapt')
+    figure1, axis1 = plt.subplots( 1 , 1)
+    axis1.plot(tp1,h11,'r',label='Unbounded - Fixed', alpha = 0.3)
+    axis1.plot(tp2,h21,'r.',label='Unbounded - Adaptive')
+    axis1.plot(tp3,h31,'r--',label='Bounded - Fixed')
+    axis1.plot(tp4,h41,'r',label='Bounded - Adapt')
 
-axis1.plot(tp1,h13,'k',label='Unbounded - Fixed', alpha = 0.3)
-axis1.plot(tp2,h23,'k.',label='Unbounded - Adaptive')
-axis1.plot(tp3,h33,'k--',label='Bounded - Fixed')
-axis1.plot(tp4,h43,'k',label='Bounded - Adapt')
+    axis1.plot(tp1,h12,'g',label='Unbounded - Fixed', alpha = 0.3)
+    axis1.plot(tp2,h22,'g.',label='Unbounded - Adaptive')
+    axis1.plot(tp3,h32,'g--',label='Bounded - Fixed')
+    axis1.plot(tp4,h42,'g',label='Bounded - Adapt')
 
-# axis1.set_title('Follower barriers 1 alphas')
-axis1.set_xlabel('time (s)')
-axis1.legend()
+    axis1.plot(tp1,h13,'k',label='Unbounded - Fixed', alpha = 0.3)
+    axis1.plot(tp2,h23,'k.',label='Unbounded - Adaptive')
+    axis1.plot(tp3,h33,'k--',label='Bounded - Fixed')
+    axis1.plot(tp4,h43,'k',label='Bounded - Adapt')
+    
+    axis1.set_ylim(-0.2,4.0)
 
+    # axis1.set_title('Follower barriers 1 alphas')
+    axis1.set_xlabel('time (s)')
+    axis1.legend()
+    axis1.grid()
 
-figure2, axis2 = plt.subplots( 2 , 1)
-axis2[0].plot(tp1,follower1.Us[0,:],'r',label='Unbounded - Fixed', alpha = 0.3)
-axis2[0].plot(tp2,follower2.Us[0,:],'r.',label='Unbounded - Adaptive')
-axis2[0].plot(tp3,follower3.Us[0,:],'r--',label='Bounded - Fixed')
-axis2[0].plot(tp4,follower4.Us[0,:],'r',label='Bounded - Adapt')
-axis2[0].set_ylabel('u')
+    figure2, axis2 = plt.subplots( 2 , 1)
+    axis2[0].plot(tp1,follower1.Us[0,:],'r',label='Unbounded - Fixed', alpha = 1.0)
+    axis2[0].plot(tp2,follower2.Us[0,:],'b',label='Unbounded - Adaptive')
+    axis2[0].plot(tp3,follower3.Us[0,:],'k',label='Bounded - Fixed')
+    axis2[0].plot(tp4,follower4.Us[0,:],'g',label='Bounded - Adapt')
+    axis2[0].axhline(y = u1_max, color = 'k', linestyle='--')
+    axis2[0].set_ylabel('$u$')
+    axis2[0].grid()
+    axis2[0].set_ylim(0.0,3.5)
 
-axis2[1].plot(tp1,follower1.Us[1,:],'r',label='Unbounded - Fixed', alpha = 0.3)
-axis2[1].plot(tp2,follower2.Us[1,:],'r.',label='Unbounded - Adaptive')
-axis2[1].plot(tp3,follower3.Us[1,:],'r--',label='Bounded - Fixed')
-axis2[1].plot(tp4,follower4.Us[1,:],'r',label='Bounded - Adapt')
-axis2[1].set_ylabel(r'\omega')
+    axis2[1].plot(tp1,follower1.Us[1,:],'r',label='Unbounded - Fixed', alpha = 0.3)
+    axis2[1].plot(tp2,follower2.Us[1,:],'b',label='Unbounded - Adaptive')
+    axis2[1].plot(tp3,follower3.Us[1,:],'k',label='Bounded - Fixed')
+    axis2[1].plot(tp4,follower4.Us[1,:],'g',label='Bounded - Adapt')
+    axis2[1].set_ylabel(r'$\omega$')
+    axis2[1].axhline(y = u2_max, color = 'k', linestyle='--')
+    axis2[1].grid()
+    axis2[1].set_ylim(-5.0,5.0)
 
-# axis1.set_title('Follower barriers 1 alphas')
-axis2[1].set_xlabel('time (s)')
-axis2[0].legend()
-axis2[1].legend()
+    # axis1.set_title('Follower barriers 1 alphas')
+    axis2[1].set_xlabel('time (s)')
+    axis2[1].legend()
 
-figure3, axis3 = plt.subplots( 1 , 1)
-tp1 = np.linspace( 0, dt_inner * len(rewards1), len(rewards1)  )
-tp2 = np.linspace( 0, dt_inner * len(rewards2), len(rewards2)  )
-tp3 = np.linspace( 0, dt_inner * len(rewards3), len(rewards3)  )
-tp4 = np.linspace( 0, dt_inner * len(rewards4), len(rewards4)  )
-axis3.plot(tp1,rewards1,'k',label='Unbounded - Fixed', alpha = 1.0)
-axis3.plot(tp2,rewards2,'r',label='Unbounded - Adaptive', alpha = 1.0)
-axis3.plot(tp3,rewards3,'g',label='Bounded - Fixed', alpha = 1.0)
-axis3.plot(tp4,rewards4,'c',label='Bounded - Adapt', alpha = 1.0)
+    figure3, axis3 = plt.subplots( 1 , 1)
+    tp1 = np.linspace( 0, dt_inner * len(rewards1), len(rewards1)  )
+    tp2 = np.linspace( 0, dt_inner * len(rewards2), len(rewards2)  )
+    tp3 = np.linspace( 0, dt_inner * len(rewards3), len(rewards3)  )
+    tp4 = np.linspace( 0, dt_inner * len(rewards4), len(rewards4)  )
+    axis3.plot(tp1,-rewards1,'k',label='Unbounded - Fixed', alpha = 1.0)
+    axis3.plot(tp2,-rewards2,'r',label='Unbounded - Adaptive', alpha = 1.0)
+    axis3.plot(tp3,-rewards3,'g',label='Bounded - Fixed', alpha = 1.0)
+    axis3.plot(tp4,-rewards4,'c',label='Bounded - Adapt', alpha = 1.0)
+    axis3.set_xlabel('time (s)')
+    axis3.legend()
+    axis3.set_ylabel('Rewards')
+    axis3.grid()
+    axis3.set_ylim(0.9,2.2)
 
-if save_plot:
-    figure1.savefig("barriers.eps")
-    figure1.savefig("barriers.png")
-    figure2.savefig("control.eps")
-    figure2.savefig("control.png")
-    figure3.savefig("rewards.eps")
-    figure3.savefig("rewards.png")
+    figure4, axis4 = plt.subplots( 2 , 1)
+    tp1 = np.linspace( 0, dt_inner * follower2.alphas_u.shape[1], follower2.alphas_u.shape[1]  )
+    tp2 = np.linspace( 0, dt_inner * follower2.alphas_u.shape[1], follower2.alphas_u.shape[1]  )
+    tp3 = np.linspace( 0, dt_inner * follower2.alphas_u.shape[1], follower2.alphas_u.shape[1]  )
+    tp4 = np.linspace( 0, dt_inner * follower2.alphas_u.shape[1], follower2.alphas_u.shape[1]  )
+    axis4[0].plot(tp4,follower2.ks_u,'c',label=r'$\alpha_0$', alpha = 1.0)
+    axis4[0].plot(tp1,follower2.alphas_u[0,:],'k',label=r'$\alpha_1$', alpha = 1.0)
+    axis4[0].plot(tp2,follower2.alphas_u[1,:],'r',label=r'$\alpha_2$', alpha = 1.0)
+    axis4[0].plot(tp3,follower2.alphas_u[2,:],'g',label=r'$\alpha_3$', alpha = 1.0)
+    # axis4[0].set_title('Unbounded Input with Adaptive')
+    axis4[0].grid()
+    axis4[0].legend()
+    axis4[0].set_ylim(-0.1, 2.0)
+
+    axis4[1].plot(tp4,follower4.ks_u,'c',label=r'$\alpha_0$', alpha = 1.0)
+    axis4[1].plot(tp1,follower4.alphas_u[0,:],'k',label=r'$\alpha_1$', alpha = 1.0)
+    axis4[1].plot(tp2,follower4.alphas_u[1,:],'r',label=r'$\alpha_2$', alpha = 1.0)
+    axis4[1].plot(tp3,follower4.alphas_u[2,:],'g',label=r'$\alpha_3$', alpha = 1.0)
+    # axis4[1].set_title('Bounded Adaptive')
+    axis4[1].set_xlabel('time (s)')
+    axis4[1].grid()
+    axis4[1].legend()
+    axis4[1].set_ylim(-0.1, 20)
+    
+    if save_plot:
+        figure1.savefig(namespace+"barriers.eps")
+        figure1.savefig(namespace+"barriers.png")
+        figure2.savefig(namespace+"control.eps")
+        figure2.savefig(namespace+"control.png")
+        figure3.savefig(namespace+"rewards.eps")
+        figure3.savefig(namespace+"rewards.png")
+        figure4.savefig(namespace+"params.eps")
+        figure4.savefig(namespace+"params.png")
    
+plot_results( follower1, follower2, follower3, follower4, leader1, leader2, leader3, leader4, np.asarray(rewards1), np.asarray(rewards2), np.asarray(rewards3), np.asarray(rewards4),  namespace="cs2_noise" )
+plot_results( follower5, follower6, follower7, follower8, leader5, leader6, leader7, leader8, np.asarray(rewards5), np.asarray(rewards6), np.asarray(rewards7), np.asarray(rewards8),  namespace="cs2_ideal" )
+plot_results( follower9, follower10, follower11, follower12, leader9, leader10, leader11, leader12, np.asarray(rewards9), np.asarray(rewards10), np.asarray(rewards11), np.asarray(rewards12),  namespace="cs2_nominal" )
     
 plt.show()

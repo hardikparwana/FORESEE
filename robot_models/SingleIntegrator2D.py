@@ -153,8 +153,8 @@ def leader_motion(t, noise = 0.0):
     # vL = 3*np.sin(np.pi*t*4) + 2.0 * np.sin(np.pi*t*4) + 0.1#  0.1 # 1.2
     # uL = 0.5 + 0.5
     # vL = 3*np.sin(np.pi*t*4) + 0.5#  0.1 # 1.2
-    uL = 2.0
-    vL = 3*np.sin(np.pi*t*4) # + 0.5#  0.1 # 1.2
+    uL = 2.0#2.0
+    vL = 3*np.sin(np.pi*t*4)#3.5*np.sin(np.pi*t*4)#3*np.sin(np.pi*t*4) # + 0.5#  0.1 # 1.2
     
     # uL = 1
     # vL = 1
@@ -163,15 +163,53 @@ def leader_motion(t, noise = 0.0):
 def leader_predict(t, noise = 0.0):
     uL, vL = leader_motion_predict(t)
     # print("noise", noise)
+    # print(f"noisy")    
     mu = torch.tensor([[uL, vL]], dtype=torch.float).reshape(-1,1)
-    bias = mu / 4
+    bias = mu / 2
     mu = mu +  bias #torch.tensor([0.5, 0.5]).reshape(-1,1)
     cov = torch.zeros((2,2), dtype=torch.float)
+    
     # cov[0,0] = noise
     # cov[1,1] = noise
-    cov[0,0] = torch.square( torch.norm(bias)/2 )
-    cov[1,1] = torch.square( torch.norm(bias)/2 )
+    
+    #this
+    cov[0,0] = torch.square( torch.norm(bias) )#torch.square( torch.norm(bias)/2 )
+    cov[1,1] = torch.square( torch.norm(bias) )#torch.square( torch.norm(bias)/2 )
     return mu, cov
 traced_leader_predict_jit = leader_predict #torch.jit.trace( leader_predict, ( torch.tensor(0), torch.tensor(0) ) )
 
+def leader_predict_noise2(t, noise = 0.0):
+    uL, vL = leader_motion_predict(t)
+    # print("noise", noise)
+    # print(f"noisy")
+    mu = torch.tensor([[uL, vL]], dtype=torch.float).reshape(-1,1)
+    bias = mu / 2
+    mu = mu +  bias #torch.tensor([0.5, 0.5]).reshape(-1,1)
+    cov = torch.zeros((2,2), dtype=torch.float)
+    
+    # cov[0,0] = noise
+    # cov[1,1] = noise
+    
+    #this
+    cov[0,0] = torch.square( torch.norm(bias) )#torch.square( torch.norm(bias)/2 )
+    cov[1,1] = torch.square( torch.norm(bias) )#torch.square( torch.norm(bias)/2 )
+    return mu, cov
+traced_leader_predict_noise_jit = leader_predict_noise2 #torch.jit.trace( leader_predict, ( torch.tensor(0), torch.tensor(0) ) )
 
+def leader_predict_ideal(t, noise = 0.0):
+    # print(f"ideal")
+    uL, vL = leader_motion_predict(t)
+    mu = torch.tensor([[uL, vL]], dtype=torch.float).reshape(-1,1)
+    cov = torch.zeros((2,2), dtype=torch.float)
+    return mu, cov
+traced_leader_predict_ideal_jit = leader_predict_ideal
+
+def leader_predict_nominal(t, noise = 0.0):
+    # print(f"nominal")
+    uL, vL = leader_motion_predict(t)
+    mu = torch.tensor([[uL, vL]], dtype=torch.float).reshape(-1,1)
+    bias = mu / 2
+    mu = mu +  bias
+    cov = torch.zeros((2,2), dtype=torch.float)
+    return mu, cov
+traced_leader_predict_nominal_jit = leader_predict_nominal

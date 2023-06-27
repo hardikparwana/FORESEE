@@ -1,2 +1,2 @@
-#!/bin/zsh
-export PYTHONPATH=/home/hardik/Desktop/Research/FORESEE/:${PYTHONPATH}
+#!/bin/bash
+export PYTHONPATH=/home/hardik/Desktop/Research/rss_foresee/:${PYTHONPATH}

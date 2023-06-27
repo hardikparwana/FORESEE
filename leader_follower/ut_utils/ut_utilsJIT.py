@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from utils.sqrtm import sqrtm
 from robot_models.UnicycleJIT import *
-from robot_models.SingleIntegrator2D import traced_leader_predict_jit
+from robot_models.SingleIntegrator2D import traced_leader_predict_ideal_jit, traced_leader_predict_nominal_jit, traced_leader_predict_jit
 
 def get_mean_cov_JIT(sigma_points, weights):
     
@@ -78,7 +78,7 @@ def get_ut_cov_root_diagonal(cov):
 
 # @torch.jit.script
 def sigma_point_expand_JIT(robot_state, sigma_points, weights, cur_t, noise):
-   
+    # print(f"expand noisy")
     n, N = sigma_points.shape
     mu, cov = traced_leader_predict_jit(cur_t, noise)  
     
@@ -96,6 +96,46 @@ def sigma_point_expand_JIT(robot_state, sigma_points, weights, cur_t, noise):
         new_weights = torch.cat( (new_weights, (temp_weights * weights[0,i]).reshape(1,-1) ) , dim=1 )
     return new_points, new_weights
 traced_sigma_point_expand_JIT = sigma_point_expand_JIT #torch.jit.script( sigma_point_expand_JIT, ( follower_states[i], leader_states[i], leader_weights[i], torch.tensor(tp) ) )
+
+def sigma_point_expand_ideal_JIT(robot_state, sigma_points, weights, cur_t, noise):
+    # print(f"expand ideal")
+    n, N = sigma_points.shape
+    mu, cov = traced_leader_predict_ideal_jit(cur_t, noise)  
+    
+    root_term = get_ut_cov_root_diagonal(cov) 
+
+    temp_points, temp_weights = traced_generate_sigma_points5_JIT( mu, root_term )
+    new_points = torch.clone( temp_points )
+    new_weights = (torch.clone( temp_weights ) * weights[0,0]).reshape(1,-1)
+        
+    for i in range(1,N):
+        mu, cov = traced_leader_predict_ideal_jit(cur_t, noise)  
+        root_term = get_ut_cov_root_diagonal(cov)        
+        temp_points, temp_weights = traced_generate_sigma_points5_JIT( mu, root_term )
+        new_points = torch.cat((new_points, temp_points), dim=1 )
+        new_weights = torch.cat( (new_weights, (temp_weights * weights[0,i]).reshape(1,-1) ) , dim=1 )
+    return new_points, new_weights
+traced_sigma_point_expand_ideal_JIT = sigma_point_expand_ideal_JIT
+
+def sigma_point_expand_nominal_JIT(robot_state, sigma_points, weights, cur_t, noise):
+    # print(f"expand nominal")
+    n, N = sigma_points.shape
+    mu, cov = traced_leader_predict_nominal_jit(cur_t, noise)  
+    
+    root_term = get_ut_cov_root_diagonal(cov) 
+
+    temp_points, temp_weights = traced_generate_sigma_points5_JIT( mu, root_term )
+    new_points = torch.clone( temp_points )
+    new_weights = (torch.clone( temp_weights ) * weights[0,0]).reshape(1,-1)
+        
+    for i in range(1,N):
+        mu, cov = traced_leader_predict_nominal_jit(cur_t, noise)  
+        root_term = get_ut_cov_root_diagonal(cov)        
+        temp_points, temp_weights = traced_generate_sigma_points5_JIT( mu, root_term )
+        new_points = torch.cat((new_points, temp_points), dim=1 )
+        new_weights = torch.cat( (new_weights, (temp_weights * weights[0,i]).reshape(1,-1) ) , dim=1 )
+    return new_points, new_weights
+traced_sigma_point_expand_nominal_JIT = sigma_point_expand_nominal_JIT
 
 def sigma_point_compress_JIT( sigma_points, weights ):
     mu, cov = get_mean_cov_JIT( sigma_points, weights )
