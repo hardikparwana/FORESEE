@@ -13,7 +13,7 @@ def random_exploration( key, input_dim=1, u_max = 10 ):
     rand_u = u_max*(2*random.uniform( subkey, shape=( input_dim, 1 )) -1 )
     return rand_u[0,0]
 
-def Sum_of_gaussians_initialize(key, state_dim, input_dim, type = 'gaussian', u_max = 10, num_basis = 200, lengthscale = 1, centers_init_min = -1, centers_init_max = 1):
+def Sum_of_gaussians_initialize(key, state_dim, input_dim, type = 'gaussian', u_max = 10, num_basis = 50, lengthscale = 1, centers_init_min = -1, centers_init_max = 1):
         
     if type=='gaussian':
         # without extra angle        
@@ -76,8 +76,8 @@ def Sum_of_gaussians_with_angle9( state, policy_params, u_max = 10, state_dim = 
     
 # @jit
 def policy9(state, params_policy):
-    # return Sum_of_gaussians9( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
-    return Sum_of_gaussians_with_angle9( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
+    # return Sum_of_gaussians9( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 50 )
+    return Sum_of_gaussians_with_angle9( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 50 )
     
 def Sum_of_gaussians( state, policy_params, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 2 ):
     log_lengthscales = policy_params[0:state_dim]
@@ -97,8 +97,8 @@ def Sum_of_gaussians_with_angle( state, policy_params, u_max = 10, state_dim = 4
     
 # @jit
 def policy(state, params_policy):
-    # return Sum_of_gaussians( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
-    return Sum_of_gaussians_with_angle( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 200 )
+    # return Sum_of_gaussians( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 50 )
+    return Sum_of_gaussians_with_angle( state, params_policy, u_max = 10, state_dim = 4, input_dim = 1, num_basis = 50 )
  
 # @jit 
 def random_policy( key, u_max = 10 ):
@@ -115,9 +115,9 @@ if 0:
     print("Testing Cart Pole Policy")
     key = random.PRNGKey(0)
     key, subkey = random.split(key)
-    key, params_policy = Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = 'gaussian', num_basis = 200, lengthscale = 1, centers_init_min = -1, centers_init_max = 1)
+    key, params_policy = Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = 'gaussian', num_basis = 50, lengthscale = 1, centers_init_min = -1, centers_init_max = 1)
 
-    # key, params_policy = Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = 'with angles', num_basis = 200, lengthscale = 1, centers_init_min = -1, centers_init_max = 1)
+    # key, params_policy = Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = 'with angles', num_basis = 50, lengthscale = 1, centers_init_min = -1, centers_init_max = 1)
    
     init_state = np.array([0.0,0,0,0]).reshape(-1,1)   
     # init_state2 = np.array([1.0,0,0,0]).reshape(-1,1)   

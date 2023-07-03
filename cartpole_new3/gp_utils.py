@@ -10,7 +10,9 @@ key = random.PRNGKey(2)
 
 def initialize_gp(num_datapoints = 10):
     meanf = jgp.mean_functions.Zero()
-    kernel = jk.RBF() * jk.Polynomial()
+    # kernel = jk.RBF() #* jk.Polynomial()
+    # kernel = jk.RBF() * jk.RationalQuadratic()
+    kernel = jk.RBF() * jk.Periodic()
     prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=num_datapoints )
     posterior = prior * likelihood
@@ -22,12 +24,12 @@ def initialize_gp(num_datapoints = 10):
 def train_gp(likelihood, posterior, parameter_state, train_x, train_y):
     D = Dataset(X=train_x, y=train_y)
     negative_mll = jit(posterior.marginal_log_likelihood(D, negative=True))
-    optimiser = ox.adam(learning_rate=0.01)
+    optimiser = ox.adam(learning_rate=0.08)
     inference_state = jgp.fit(
         objective=negative_mll,
         parameter_state=parameter_state,
         optax_optim=optimiser,
-        num_iters=1000,
+        num_iters=1500,
     )
     learned_params, training_history = inference_state.unpack()
     return likelihood, posterior, learned_params, D
@@ -41,7 +43,9 @@ def predict_gp(likelihood, posterior, learned_params, D, test_x):
 
 def initialize_gp_prediction_distribution(gp_params, train_x, train_y):
     meanf = jgp.mean_functions.Zero()
-    kernel = jk.RBF() * jk.Polynomial()
+    # kernel = jk.RBF() #* jk.Polynomial()
+    # kernel = jk.RBF() * jk.RationalQuadratic()
+    kernel = jk.RBF() * jk.Periodic()
     prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=train_x.shape[0] )
     posterior = prior * likelihood
@@ -51,7 +55,9 @@ def initialize_gp_prediction_distribution(gp_params, train_x, train_y):
 
 def initialize_gp_prediction(gp_params, train_x, train_y):
     meanf = jgp.mean_functions.Zero()
-    kernel = jk.RBF() * jk.Polynomial()
+    # kernel = jk.RBF() #* jk.Polynomial()
+    # kernel = jk.RBF() * jk.RationalQuadratic()
+    kernel = jk.RBF() * jk.Periodic()
     prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=train_x.shape[0] )
     posterior = prior * likelihood
@@ -61,7 +67,9 @@ def initialize_gp_prediction(gp_params, train_x, train_y):
 
 def predict_with_gp_params(gp_params, train_x, train_y, test_x):
     meanf = jgp.mean_functions.Zero()
-    kernel = jk.RBF() * jk.Polynomial()
+    # kernel = jk.RBF() #* jk.Polynomial()
+    # kernel = jk.RBF() * jk.RationalQuadratic()
+    kernel = jk.RBF() * jk.Periodic()
     prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=train_x.shape[0] )
     posterior = prior * likelihood

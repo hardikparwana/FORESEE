@@ -1,34 +1,12 @@
 import jax.numpy as np
 import jax
+from jax import jit
 from utils.utils import wrap_angle
+from diffrax import diffeqsolve, ODETerm, Tsit5
 
-def step(y, u, dt):
-    """
-    System of first order equations for a cart-pole system
-    The policy commands the force applied to the cart
-    (stable equilibrium point with the pole down at [~,0,0,0])
-    # theta = 0 at stable equilibrium
-    """
-    return rk4_integration( y, u, dt )
-    x, x_dot, theta, theta_dot = y[0,0], y[1,0], y[2,0], y[3,0]
-    
-    m1 = 0.5  # mass of the cart
-    m2 = 0.5  # mass of the pendulum
-    l = 0.5   # length of the pendulum
-    b = 0.1   # friction coefficient
-    g = 9.81  # acceleration of gravity
-        
-    den = 4*(m1+m2)-3*m2*np.cos(theta)**2
-    
-    dydt = np.array([x_dot,
-            (2*m2*l*theta_dot**2*np.sin(theta)+3*m2*g*np.sin(theta)*np.cos(theta)+4*u[0,0]-4*b*x_dot)/den,
-            theta_dot,
-            (-3*m2*l*theta_dot**2*np.sin(theta)*np.cos(theta)-6*(m1+m2)*g*np.sin(theta)-6*(u[0,0]-b*x_dot)*np.cos(theta))/(l*den)]).reshape(-1,1)
-    # print(f"dy_dt: {dydt.T}")
-    new_state = y + dydt * dt
-    new_state_clipped = np.array([ new_state[0,0], new_state[1,0], wrap_angle(new_state[2,0]), new_state[3,0] ]).reshape(-1,1)
 
-    return new_state
+def step_without_wrap(y, u, dt):
+    return rk4_integration_without_wrap( y, u, dt )
 
 def get_next_states_from_dynamics(states, controls, dt):
     new_states = rk4_integration( states[:,0].reshape(-1,1), controls[:,0].reshape(-1,1), dt )
@@ -45,6 +23,15 @@ def rk4_integration(y, u, dt):
     k = ( k1 + 2*k2 + 3*k3 + k4 ) / 6.0
     new_state = y + k
     return np.array([ new_state[0,0], new_state[1,0], wrap_angle(new_state[2,0]), new_state[3,0] ]).reshape(-1,1)
+
+def rk4_integration_without_wrap(y, u, dt):
+    k1 = dt * ( state_dot( y, u ) )
+    k2 = dt * ( state_dot( y + k1/2.0, u ) )
+    k3 = dt * ( state_dot( y + k2/2.0, u ) )
+    k4 = dt * ( state_dot( y + k3, u ) )
+    k = ( k1 + 2*k2 + 3*k3 + k4 ) / 6.0
+    new_state = y + k
+    return np.array([ new_state[0,0], new_state[1,0], new_state[2,0], new_state[3,0] ]).reshape(-1,1)
 
 def step_using_xdot(state, state_dot, dt):
      state_next = state + state_dot * dt
@@ -67,6 +54,33 @@ def state_dot( y, u ):
             (-3*m2*l*theta_dot**2*np.sin(theta)*np.cos(theta)-6*(m1+m2)*g*np.sin(theta)-6*(u[0,0]-b*x_dot)*np.cos(theta))/(l*den)]).reshape(-1,1)
 
     return dydt
+
+def state_dot_diffrax(t, y, args):
+    return np.append(state_dot( y[:-1].reshape(-1,1), y[-1].reshape(-1,1) ), np.array([[0.0]]), axis=0)
+term = ODETerm(state_dot_diffrax)
+solver = Tsit5()
+
+
+def step(y, u, dt):
+    """
+    System of first order equations for a cart-pole system
+    The policy commands the force applied to the cart
+    (stable equilibrium point with the pole down at [~,0,0,0])
+    # theta = 0 at stable equilibrium
+    """
+    return rk4_integration( y, u, dt )
+
+@jit
+def step_with_diffrax(y, u, dt):
+    solution = diffeqsolve(term, solver, t0=0, t1=dt, dt0=dt/5, y0=np.append(y,u,axis=0))
+    return solution.ys[0,:-1].reshape(-1,1)
+
+@jit
+def step_with_wrap_diffrax(y, u, dt):
+    solution = diffeqsolve(term, solver, t0=0, t1=dt, dt0=dt/5, y0=np.append(y,u,axis=0))
+    next_state = solution.ys[0,:-1].reshape(-1,1)
+    next_state = np.array([ next_state[0,0], next_state[1,0], wrap_angle(next_state[2,0]), next_state[3,0] ]).reshape(-1,1)
+    return next_state
     
 def get_state_dot_noisy(state, action):
     X_dot = state_dot(state, action)

@@ -94,7 +94,7 @@ def get_future_reward_grad(X, params_policy, gp_params1, gp_params2, gp_params3,
     return grad(get_future_reward, 1)(X, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
 
 
-def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learning_rate, init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y ):
+def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learning_rate, init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y ):
 
 # if (optimize_offline):
 #     #train using scipy ###########################
@@ -121,6 +121,7 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
         best_params = np.copy(params_policy)
         best_cost = np.copy(cost)
         costs_adam = []
+        moving_average_cost_improvement = 0
         for j in range(n_restarts):
             
             if (j>0):
@@ -132,13 +133,27 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
             best_cost_local = np.copy(cost_initial)
             best_params_local = np.copy(params_policy)
 
-            # optimizer = optax.adam(adam_start_learning_rate)
+            if run==0:
+                lr_rate = adam_new_start_learning_rates[0]
+            else:
+                if j==0:
+                    lr_rate = adam_old_start_learning_rates[1]
+                else:
+                    lr_rate = adam_new_start_learning_rates[0]
+            # if j==0:
+            #     lr_rate = adam_start_learning_rates[0]
+            # else:
+            #     lr_rate = adam_start_learning_rates[1]
+            
+            # if run > 0: 
+            #     lr_rate = adam_start_learning_rates[1]
+            
+            # optimizer = optax.adam(lr_rate)
             # opt_state = optimizer.init(params_policy)
-
-            # Exponential decay of the learning rate.
+            # Exponential decay of the learning rate.            
             scheduler = optax.exponential_decay(
-                init_value=adam_start_learning_rate, 
-                transition_steps=200,
+                init_value=lr_rate, 
+                transition_steps=100,
                 decay_rate=0.95)
 
             # Combining gradient transforms using `optax.chain`.
@@ -149,36 +164,80 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
                 # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
                 optax.scale(-1.0)
             )
-
             opt_state = gradient_transform.init(params_policy)
-            
-            for i in range(iter_adam + 1):
-                t0 = time.time()
-                cost = get_future_reward( init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
-                cost_run.append(cost)
-                if (cost<best_cost):
-                    best_cost = np.copy(cost)
-                    best_params = np.copy(params_policy)
-                if (cost<best_cost_local):
-                    best_cost_local = np.copy(cost)
-                    best_params_local = np.copy(params_policy)
-                if i==iter_adam:
-                    continue
-                # print(f"inside adam")
-                # t0 = time.time()
+            reset = 0
+            params_policy_temp = 0
+            for i in range(iters_adam[run] + 1):
+                reset = reset + 1
+                
                 grads = get_future_reward_grad( init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
-                # print(f"adam first grad: {time.time()-t0}")
-                
                 # updates, opt_state = optimizer.update(grads, opt_state)
-                updates, opt_state = gradient_transform.update(grads, opt_state)
+                updates, opt_state = gradient_transform.update(grads, opt_state)                
+                params_policy_temp = optax.apply_updates(params_policy, updates)
                 
-                params_policy = optax.apply_updates(params_policy, updates)
-                # if i%100==0:
-                #     print(f"i:{i}, cost:{cost}, grad:{np.max(np.abs(grads))}")
+                cost = get_future_reward( init_state, params_policy_temp, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
+                cost_run.append(cost)
+                # horizon = 5
+                # if ((i>200)) and (run>0):# and (reset > horizon)):
+                #     if cost > cost_run[-1]+0.01:
+                if i==100:
+                        lr_rate = adam_new_start_learning_rates[1]
+                    # moving_average_cost_improvement = np.sum(  np.asarray(cost_run[-horizon:]) - np.asarray(cost_run[-horizon-1:-1])  )
+                    # if moving_average_cost_improvement > 0: # bad learning rate
+                        reset = 0
+                        lr_rate = lr_rate * 0.95
+                        scheduler = optax.exponential_decay(
+                            init_value=lr_rate, 
+                            transition_steps=200,
+                            decay_rate=0.95)
 
-                # print(f"time: {time.time()-t0}, cost:{cost}")
+                        # Combining gradient transforms using `optax.chain`.
+                        gradient_transform = optax.chain(
+                            optax.clip_by_global_norm(1.0),  # Clip by the gradient by the global norm.
+                            optax.scale_by_adam(),  # Use the updates from adam.
+                            optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
+                            # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
+                            optax.scale(-1.0)
+                        )
+                        opt_state = gradient_transform.init(params_policy)
+                        i = i - 1
+                        continue
+                if i==1500:
+                        lr_rate = adam_new_start_learning_rates[2]
+                        reset = 0
+                        lr_rate = lr_rate * 0.95
+                        scheduler = optax.exponential_decay(
+                            init_value=lr_rate, 
+                            transition_steps=200,
+                            decay_rate=0.95)
+                        gradient_transform = optax.chain(
+                            optax.clip_by_global_norm(1.0),  # Clip by the gradient by the global norm.
+                            optax.scale_by_adam(),  # Use the updates from adam.
+                            optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
+                            # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
+                            optax.scale(-1.0)
+                        )
+                        opt_state = gradient_transform.init(params_policy)
+                        i = i - 1
+                        continue
+                
+                params_policy = np.copy(params_policy_temp)
+                
+                # if (cost<best_cost):
+                #     best_cost = np.copy(cost)
+                #     best_params = np.copy(params_policy)
+                # if (cost<best_cost_local):
+                #     best_cost_local = np.copy(cost)
+                #     best_params_local = np.copy(params_policy)
+                if i==iters_adam[run]:
+                    continue
+               
             costs_adam.append( cost_run )
             print(f"run: {j}, cost initial:{cost_initial}, best cost local:{best_cost_local}, cost final:{best_cost}")
+        
+            if cost_run[-1]<best_cost:
+                best_cost = cost_run[-1]
+                best_params = np.copy(params_policy_temp)
         
         params_policy = np.copy(best_params)
             
@@ -189,7 +248,7 @@ def train_policy( key, use_custom_gd, use_jax_scipy, use_adam, adam_start_learni
 
 
 # Set up environment
-exp_name = "cartpole_new2_test4_rl1_nrestarts5_lr05_adamiter2000_decay200_095"
+exp_name = "cartpole_new3_rl3_test2_new_predict_nrestarts2_lr05_001_adamiter3000_4000_decay200_095"
 env_to_render = CustomCartPoleEnv(render_mode="human")
 env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_sigma_test_ideal" )
 observation, info = env.reset(seed=42)
@@ -214,10 +273,14 @@ optimize_offline = True
 use_adam = True
 use_custom_gd = False
 use_jax_scipy = False
-n_restarts = 5#50#100
-iter_adam = 2000#4000#1000
-adam_start_learning_rate = 0.05#0.05#0.001
+n_restarts = 2#50#100
+iter_adam = 3000#4000#1000
+iters_adam = [3000, 4000, 4000, 4000, 4000]
+adam_start_learning_rate = 0.02#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
+
+adam_new_start_learning_rates = [0.05, 0.001, 0.0005]
+adam_old_start_learning_rates = [0.01, 0.001, 0.0005]
 
 # sometimes good with adam 1000, time 0.05
 
@@ -237,7 +300,8 @@ stds = [0]*4
 mus2 = [0]*4
 stds2 = [0]*4
 action = policy( state, params_policy ).reshape(-1,1)
-train_x = np.append(np.copy(state).reshape(1,-1), action.reshape(1,-1), axis=1)
+state_gp = np.array( [ state[0,0], state[1,0], state[3,0], np.sin(state[2,0]), np.cos(state[2,0]) ] )
+train_x = np.append(state_gp.reshape(1,-1), action.reshape(1,-1), axis=1)
 train_y = np.copy(state).reshape(1,-1)
 
 # t0 = time.time()
@@ -270,8 +334,8 @@ for run in range(num_trials):
         next_state = step(state, action, dt_inner)
         env.set_state( (next_state[0,0].item(), next_state[1,0].item(), next_state[2,0].item(), next_state[3,0].item()) )
         env.render()  
-        
-        train_x = np.append( train_x, np.append(state.reshape(1,-1), action.reshape(1,-1), axis=1), axis=0 )
+        state_gp = np.array( [ state[0,0], state[1,0], state[3,0], np.sin(state[2,0]), np.cos(state[2,0]) ] )
+        train_x = np.append( train_x, np.append(state_gp.reshape(1,-1), action.reshape(1,-1), axis=1), axis=0 )
         train_y = np.append(train_y, next_state.reshape(1,-1), axis=0)
         
         state = np.copy(next_state)
@@ -340,7 +404,7 @@ for run in range(num_trials):
     print(f"first reward grad: time: {time.time()-t0}")
     
     # Train policy
-    key, params_policy, costs_adam = train_policy( key, use_custom_gd = use_custom_gd, use_jax_scipy = use_jax_scipy, use_adam = use_adam, adam_start_learning_rate = adam_start_learning_rate, init_state = state_init, params_policy = params_policy, gp_params1 = learned_params[0], gp_params2 = learned_params[1], gp_params3 = learned_params[2], gp_params4 = learned_params[3], gp_train_x = train_x[1:,:], gp_train_y = train_y[1:,:] )
+    key, params_policy, costs_adam = train_policy( run, key, use_custom_gd = use_custom_gd, use_jax_scipy = use_jax_scipy, use_adam = use_adam, adam_start_learning_rate = adam_start_learning_rate, init_state = state_init, params_policy = params_policy, gp_params1 = learned_params[0], gp_params2 = learned_params[1], gp_params3 = learned_params[2], gp_params4 = learned_params[3], gp_train_x = train_x[1:,:], gp_train_y = train_y[1:,:] )
     fig, ax = plt.subplots(n_restarts)
     for i in range(n_restarts):
         ax[i].plot( costs_adam[i] )

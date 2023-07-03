@@ -16,17 +16,20 @@ from cartpole_new3.ut_utils.ut_utils import *
 
 # visualization
 from robot_models.custom_cartpole_mc_pilco import CustomCartPoleEnv
-from robot_models.cartpole2D_mcpilco import step, step_without_wrap, step_with_diffrax, step_with_wrap_diffrax
+from robot_models.cartpole2D_mcpilco import step, step_without_wrap, step_with_diffrax
 from cartpole_new3.gym_wrappers.record_video import RecordVideo
 
 key = random.PRNGKey(2)
 
 @jit
 def get_future_reward(X, params_policy, dt):
-    reward = 0    
-    states = np.copy(X)        
+    states, weights, weights_cov = initialize_sigma_points(X)
+    reward = 0
+    
+    states = np.copy(X)
+        
     def body(t, inputs):
-        reward, states = inputs    
+        reward, states, weights, weights_cov = inputs    
         # mean_position = get_mean( states, weights )
         # solution = policy( mean_position, params_policy )
         # next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand( states, weights, weights_cov, solution, dt)
@@ -41,14 +44,13 @@ def get_future_reward(X, params_policy, dt):
         # states = step(states, action, dt)
         # states = step_without_wrap(states, action, dt)
         states = step_with_diffrax(states, action, dt)
-        # states = step_with_wrap_diffrax(states, action, dt)
         reward = reward + mc_pilco_reward(states)
         # reward = reward + compute_reward(states)
         # reward = reward + np.square(states[0,0])
         
-        return reward, states
+        return reward, states, weights, weights_cov
     
-    return lax.fori_loop( 0, H, body, (reward, states) )[0]
+    return lax.fori_loop( 0, H, body, (reward, states, weights, weights_cov) )[0]
 
 @jit
 def get_future_reward_grad(X, params_policy, dt):
@@ -82,7 +84,7 @@ optimize_offline = True
 use_adam = True
 use_custom_gd = False
 use_jax_scipy = False
-n_restarts = 2#20#50#100
+n_restarts = 20#50#100
 iter_adam = 5000
 adam_start_learning_rate = 0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
@@ -126,50 +128,54 @@ if (optimize_offline):
             best_cost_local = np.copy(cost_initial)
             best_params_local = np.copy(params_policy)
 
-            # optimizer = optax.adam(adam_start_learning_rate)
-            # opt_state = optimizer.init(params_policy)
+            optimizer = optax.adam(adam_start_learning_rate)
+            opt_state = optimizer.init(params_policy)
 
-            # Exponential decay of the learning rate.
-            scheduler = optax.exponential_decay(
-                init_value=adam_start_learning_rate, 
-                transition_steps=100,
-                decay_rate=0.99)
+            # # Exponential decay of the learning rate.
+            # scheduler = optax.exponential_decay(
+            #     init_value=adam_start_learning_rate, 
+            #     transition_steps=1000,
+            #     decay_rate=0.999)
 
-            # Combining gradient transforms using `optax.chain`.
-            gradient_transform = optax.chain(
-                optax.clip_by_global_norm(1.0),  # Clip by the gradient by the global norm.
-                optax.scale_by_adam(),  # Use the updates from adam.
-                optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
-                # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
-                optax.scale(-1.0)
-            )
+            # # Combining gradient transforms using `optax.chain`.
+            # gradient_transform = optax.chain(
+            #     optax.clip_by_global_norm(1.0),  # Clip by the gradient by the global norm.
+            #     optax.scale_by_adam(),  # Use the updates from adam.
+            #     optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
+            #     # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
+            #     optax.scale(-1.0)
+            # )
 
-            opt_state = gradient_transform.init(params_policy)
+            # opt_state = gradient_transform.init(params_policy)
             
             for i in range(iter_adam + 1):
                 t0 = time.time()
                 cost = get_future_reward( state, params_policy, dt_outer )
                 cost_run.append(cost)
                 
-                if (cost<best_cost):
-                    best_cost = np.copy(cost)
-                    best_params = np.copy(params_policy)
-                if (cost<best_cost_local):
-                    best_cost_local = np.copy(cost)
-                    best_params_local = np.copy(params_policy)
-                if i==iter_adam:
-                    continue
+                # if (cost<best_cost):
+                #     best_cost = np.copy(cost)
+                #     best_params = np.copy(params_policy)
+                # if (cost<best_cost_local):
+                #     best_cost_local = np.copy(cost)
+                #     best_params_local = np.copy(params_policy)
+                # if i==iter_adam:
+                #     continue
                 
                 grads = get_future_reward_grad( state, params_policy, dt_outer )
                 
-                # updates, opt_state = optimizer.update(grads, opt_state)
-                updates, opt_state = gradient_transform.update(grads, opt_state)
+                updates, opt_state = optimizer.update(grads, opt_state)
+                # updates, opt_state = gradient_transform.update(grads, opt_state)
                 
                 params_policy = optax.apply_updates(params_policy, updates)
                 # if i%100==0:
                 #     print(f"i:{i}, cost:{cost}, grad:{np.max(np.abs(grads))}")
 
                 # print(f"time: {time.time()-t0}, cost:{cost}")
+            if (cost<best_cost):
+                    best_cost = np.copy(cost)
+                    best_params = np.copy(params_policy)    
+                
             print(f"run: {j}, cost initial:{cost_initial}, best cost local:{best_cost_local}, cost final:{best_cost}")
             costs_adam.append(cost_run)
         params_policy = np.copy(best_params)
@@ -180,12 +186,10 @@ print(f"len:{len(costs_adam)}")
 fig, ax = plt.subplots(n_restarts)
 for i in range(n_restarts):
     ax[i].plot( costs_adam[i] )
-plt.savefig("ideal_deterministic_test2" + "adam_loss"+".png")
+plt.savefig("ideal_deterministic2_diffrax_old_reward" + "adam_loss"+".png")
 
 action = 0
 input("Press Enter to continue...")
-reward = 0
-print(f"reward for params to run finally: {get_future_reward( state, params_policy, dt_outer )}")
 while t < tf:
 
     if not optimize_offline:
@@ -212,14 +216,12 @@ while t < tf:
 
     action = policy( state, params_policy ).reshape(-1,1)
     print(f"theta:{ state[2,0]*180/np.pi }, input:{ action }")#, state:{ state.T }")
-    # next_state = step(state, action, dt_inner)
-    next_state = step_with_diffrax(state, action, dt_inner)
+    next_state = step(state, action, dt_inner)
     env.set_state( (next_state[0,0].item(), next_state[1,0].item(), next_state[2,0].item(), next_state[3,0].item()) )
-    env.render()      
+    env.render()  
+    
     state = np.copy(next_state)
-    reward = reward + mc_pilco_reward(state)
     t = t + dt_inner
-print(f"reward: {reward}")
 env.close()
 
             
@@ -237,5 +239,3 @@ env.close()
 # reward = reward + reward_UT_Mean_Evaluator_basic( states, weights, weights_cov )
 # # return np.sum(states)
 # return reward
-
-
