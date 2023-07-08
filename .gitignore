@@ -20,3 +20,9 @@ notebooks/.ipynb_checkpoints/
 paper codes/pets-handful-of-trials/dmbrl/modeling/utils/__pycache__/*
 cartpole_new/__pycache__/*
 cartpole_new/ut_utils/__pycache__/
+cartpole_new2/__pycache__/*
+cartpole_new2/gym_wrappers/__pycache__/*
+cartpole_new2/gym_wrappers/monitoring/__pycache__/*
+cartpole_new2/ut_utils/__pycache__/*
+cartpole_new3/__pycache__/*
+cartpole_new2/gym_wrappers/monitoring/__pycache__/*
