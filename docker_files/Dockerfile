@@ -13,6 +13,7 @@ RUN pip3 install cyipopt==1.2.0
 RUN pip3 install jax==0.4.6 jaxlib==0.4.6 gpjax==0.5.9 optax==0.1.4 jaxopt
 RUN pip3 install jax==0.4.6 jaxlib==0.4.6
 
+RUN apt update
 RUN apt install -y wget build-essential libncursesw5-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libbz2-dev libffi-dev zlib1g-dev
 RUN apt-get install -y software-properties-common
 RUN add-apt-repository ppa:deadsnakes/ppa

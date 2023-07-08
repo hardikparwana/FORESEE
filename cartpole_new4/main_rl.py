@@ -17,12 +17,12 @@ from cartpole_new3.ut_utils.ut_utils import *
 
 # visualization
 from robot_models.custom_cartpole_mc_pilco import CustomCartPoleEnv
-from robot_models.cartpole2D_mcpilco import step, get_next_states_from_dynamics, step_with_diffrax
+from robot_models.cartpole2D_mcpilco import step, get_next_states_from_dynamics
 from cartpole_new3.gym_wrappers.record_video import RecordVideo
 
 key = random.PRNGKey(2)
 
-# @jit
+@jit
 def get_future_reward(X, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
     states, weights, weights_cov = initialize_sigma_points(X)
     reward = 0
@@ -31,18 +31,7 @@ def get_future_reward(X, params_policy, gp_params1, gp_params2, gp_params3, gp_p
     gp1 = initialize_gp_prediction( gp_params2, gp_train_x, gp_train_y[:,1].reshape(-1,1) )
     gp2 = initialize_gp_prediction( gp_params3, gp_train_x, gp_train_y[:,2].reshape(-1,1) )
     gp3 = initialize_gp_prediction( gp_params4, gp_train_x, gp_train_y[:,3].reshape(-1,1) )
-
-    # for i in range(H):
-    #     control_inputs = policy9( states, params_policy )
-    #     next_states_mean, next_states_cov = get_next_states_with_gp( states, control_inputs, [gp0, gp1, gp2, gp3] )
-    #     next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_with_mean_cov( next_states_mean, next_states_cov, weights, weights_cov)
-    #     next_states, next_weights, next_weights_cov = sigma_point_compress( next_states_expanded, next_weights_expanded, next_weights_cov_expanded )
-    #     states = next_states
-    #     weights = next_weights
-    #     weights_cov = next_weights_cov
-    #     reward = reward + reward_UT_Mean_Evaluator_basic( states, weights, weights_cov )
-    # return reward
-
+    
     def body(t, inputs):
         reward, states, weights, weights_cov = inputs
         # mean_position = get_mean( states, weights )
@@ -119,7 +108,6 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
         print(f"reward final GD : { get_future_reward( init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y ) }")
 
     if use_jax_scipy:
-        costs_adam = []
         minimize_function = lambda params: get_future_reward( init_state, params, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y )
         solver = jaxopt.ScipyMinimize(fun=minimize_function, maxiter=iter_adam)
         params_policy, cost_state = solver.run(params_policy)
@@ -166,7 +154,7 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
             scheduler = optax.exponential_decay(
                 init_value=lr_rate, 
                 transition_steps=100,
-                decay_rate=0.99)
+                decay_rate=0.95)
 
             # Combining gradient transforms using `optax.chain`.
             gradient_transform = optax.chain(
@@ -184,8 +172,7 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
                 
                 grads = get_future_reward_grad( init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
                 # updates, opt_state = optimizer.update(grads, opt_state)
-                updates, opt_state = gradient_transform.update(grads, opt_state)           
-                # print(f"grads: {grads}")     
+                updates, opt_state = gradient_transform.update(grads, opt_state)                
                 params_policy_temp = optax.apply_updates(params_policy, updates)
                 
                 cost = get_future_reward( init_state, params_policy_temp, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
@@ -198,11 +185,6 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
                     # moving_average_cost_improvement = np.sum(  np.asarray(cost_run[-horizon:]) - np.asarray(cost_run[-horizon-1:-1])  )
                     # if moving_average_cost_improvement > 0: # bad learning rate
                         reset = 0
-                        # cost_run = cost_run[:-1]
-                        # print(f"changing learning rate i: {i}")
-                        # optimizer = optax.adam(lr_rate)
-                        # opt_state = optimizer.init(params_policy)
-                        # Exponential decay of the learning rate.
                         lr_rate = lr_rate * 0.95
                         scheduler = optax.exponential_decay(
                             init_value=lr_rate, 
@@ -220,22 +202,43 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
                         opt_state = gradient_transform.init(params_policy)
                         i = i - 1
                         continue
+                if i==1500:
+                        lr_rate = adam_new_start_learning_rates[2]
+                        reset = 0
+                        lr_rate = lr_rate * 0.95
+                        scheduler = optax.exponential_decay(
+                            init_value=lr_rate, 
+                            transition_steps=200,
+                            decay_rate=0.95)
+                        gradient_transform = optax.chain(
+                            optax.clip_by_global_norm(1.0),  # Clip by the gradient by the global norm.
+                            optax.scale_by_adam(),  # Use the updates from adam.
+                            optax.scale_by_schedule(scheduler),  # Use the learning rate from the scheduler.
+                            # Scale updates by -1 since optax.apply_updates is additive and we want to descend on the loss.
+                            optax.scale(-1.0)
+                        )
+                        opt_state = gradient_transform.init(params_policy)
+                        i = i - 1
+                        continue
                 
                 params_policy = np.copy(params_policy_temp)
-                # opt_state = gradient_transform.init(params_policy)
                 
-                if (cost<best_cost):
-                    best_cost = np.copy(cost)
-                    best_params = np.copy(params_policy)
-                if (cost<best_cost_local):
-                    best_cost_local = np.copy(cost)
-                    best_params_local = np.copy(params_policy)
+                # if (cost<best_cost):
+                #     best_cost = np.copy(cost)
+                #     best_params = np.copy(params_policy)
+                # if (cost<best_cost_local):
+                #     best_cost_local = np.copy(cost)
+                #     best_params_local = np.copy(params_policy)
                 if i==iters_adam[run]:
                     continue
                
             costs_adam.append( cost_run )
             print(f"run: {j}, cost initial:{cost_initial}, best cost local:{best_cost_local}, cost final:{best_cost}")
-        exit()
+        
+            if cost_run[-1]<best_cost:
+                best_cost = cost_run[-1]
+                best_params = np.copy(params_policy_temp)
+        
         params_policy = np.copy(best_params)
             
         with open('new_rl.npy', 'wb') as f:
@@ -245,7 +248,7 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
 
 
 # Set up environment
-exp_name = "cartpole_new3_rl3_cpurbfactive_lr05init_mcpilco_diffrax"
+exp_name = "cartpole_new3_rl3_test2_new_predict_nrestarts2_lr05_001_adamiter3000_4000_decay200_095"
 env_to_render = CustomCartPoleEnv(render_mode="human")
 env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_sigma_test_ideal" )
 observation, info = env.reset(seed=42)
@@ -271,20 +274,20 @@ use_adam = True
 use_custom_gd = False
 use_jax_scipy = False
 n_restarts = 2#50#100
-iter_adam = 5000#4000#1000
-iters_adam = [4000, 4000, 4000, 4000, 4000]
-adam_start_learning_rate = 0.03#0.05#0.001
+iter_adam = 3000#4000#1000
+iters_adam = [3000, 4000, 4000, 4000, 4000]
+adam_start_learning_rate = 0.02#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
 
 adam_new_start_learning_rates = [0.05, 0.001, 0.0005]
-adam_old_start_learning_rates = [0.005, 0.001, 0.0005]
+adam_old_start_learning_rates = [0.01, 0.001, 0.0005]
 
 # sometimes good with adam 1000, time 0.05
 
 # RL setup
 num_trials = 5
-tf_trials = [0.5, 3.0, 3.0, 3.0, 3.0, 3.0]
-random_threshold = np.array([1.0, 0.0, 0.0, 0.0, 0.0, 3.0])
+tf_trials = [3.0, 3.0, 3.0, 3.0, 3.0]
+random_threshold = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
 
 # GP setup
 likelihoods = [0]*4
@@ -328,8 +331,7 @@ for run in range(num_trials):
             action = policy( state, params_policy ).reshape(-1,1)
             print(f"action policy:{action}, state:{state.T}")
             
-        # next_state = step(state, action, dt_inner)
-        next_state = step_with_diffrax(state, action, dt_inner)
+        next_state = step(state, action, dt_inner)
         env.set_state( (next_state[0,0].item(), next_state[1,0].item(), next_state[2,0].item(), next_state[3,0].item()) )
         env.render()  
         state_gp = np.array( [ state[0,0], state[1,0], state[3,0], np.sin(state[2,0]), np.cos(state[2,0]) ] )
@@ -399,8 +401,7 @@ for run in range(num_trials):
     print(f"first reward: {reward}, time: {time.time()-t0}")
     t0 = time.time()
     grads = get_future_reward_grad( state_init, params_policy, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[1:,:], train_y[1:,:])
-    print(f"first reward grad: time: {time.time()-t0}, grad: {np.max(np.abs(grads))}")
-    # exit()
+    print(f"first reward grad: time: {time.time()-t0}")
     
     # Train policy
     key, params_policy, costs_adam = train_policy( run, key, use_custom_gd = use_custom_gd, use_jax_scipy = use_jax_scipy, use_adam = use_adam, adam_start_learning_rate = adam_start_learning_rate, init_state = state_init, params_policy = params_policy, gp_params1 = learned_params[0], gp_params2 = learned_params[1], gp_params3 = learned_params[2], gp_params4 = learned_params[3], gp_train_x = train_x[1:,:], gp_train_y = train_y[1:,:] )
