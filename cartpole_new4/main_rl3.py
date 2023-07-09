@@ -11,14 +11,14 @@ from matplotlib.animation import FFMpegWriter
 plt.rcParams.update({'font.size': 10})
 
 from utils.utils import *
-from cartpole_new3.gp_utils import * # initialize_gp, train_gp, predict_gp
-from cartpole_new3.cartpole_policy import policy, policy9, policy_grad, random_exploration, Sum_of_gaussians_initialize, random_policy
-from cartpole_new3.ut_utils.ut_utils import *
+from cartpole_new4.gp_utils import * # initialize_gp, train_gp, predict_gp
+from cartpole_new4.cartpole_policy import policy, policy9, policy_grad, random_exploration, Sum_of_gaussians_initialize, random_policy
+from cartpole_new4.ut_utils.ut_utils import *
 
 # visualization
 from robot_models.custom_cartpole_mc_pilco import CustomCartPoleEnv
 from robot_models.cartpole2D_mcpilco import step, get_next_states_from_dynamics, step_with_diffrax
-from cartpole_new3.gym_wrappers.record_video import RecordVideo
+from cartpole_new4.gym_wrappers.record_video import RecordVideo
 
 key = random.PRNGKey(2)
 
@@ -31,7 +31,18 @@ def get_future_reward(X, params_policy, gp_params1, gp_params2, gp_params3, gp_p
     gp1 = initialize_gp_prediction( gp_params2, gp_train_x, gp_train_y[:,1].reshape(-1,1) )
     gp2 = initialize_gp_prediction( gp_params3, gp_train_x, gp_train_y[:,2].reshape(-1,1) )
     gp3 = initialize_gp_prediction( gp_params4, gp_train_x, gp_train_y[:,3].reshape(-1,1) )
-    
+
+    # for i in range(H):
+    #     control_inputs = policy9( states, params_policy )
+    #     next_states_mean, next_states_cov = get_next_states_with_gp( states, control_inputs, [gp0, gp1, gp2, gp3] )
+    #     next_states_expanded, next_weights_expanded, next_weights_cov_expanded = sigma_point_expand_with_mean_cov( next_states_mean, next_states_cov, weights, weights_cov)
+    #     next_states, next_weights, next_weights_cov = sigma_point_compress( next_states_expanded, next_weights_expanded, next_weights_cov_expanded )
+    #     states = next_states
+    #     weights = next_weights
+    #     weights_cov = next_weights_cov
+    #     reward = reward + reward_UT_Mean_Evaluator_basic( states, weights, weights_cov )
+    # return reward
+
     def body(t, inputs):
         reward, states, weights, weights_cov = inputs
         # mean_position = get_mean( states, weights )
@@ -170,10 +181,12 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
             params_policy_temp = 0
             for i in range(iters_adam[run] + 1):
                 reset = reset + 1
-                
+                if i%200==0:
+                    print(f"start: {j}, iter : {i}")
                 grads = get_future_reward_grad( init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
                 # updates, opt_state = optimizer.update(grads, opt_state)
-                updates, opt_state = gradient_transform.update(grads, opt_state)                
+                updates, opt_state = gradient_transform.update(grads, opt_state)           
+                # print(f"grads: {grads}")     
                 params_policy_temp = optax.apply_updates(params_policy, updates)
                 
                 cost = get_future_reward( init_state, params_policy_temp, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
@@ -181,7 +194,7 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
                 # horizon = 5
                 # if ((i>200)) and (run>0):# and (reset > horizon)):
                 #     if cost > cost_run[-1]+0.01:
-                if i==100:
+                if i==200:
                         lr_rate = adam_new_start_learning_rates[1]
                     # moving_average_cost_improvement = np.sum(  np.asarray(cost_run[-horizon:]) - np.asarray(cost_run[-horizon-1:-1])  )
                     # if moving_average_cost_improvement > 0: # bad learning rate
@@ -194,8 +207,8 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
                         lr_rate = lr_rate * 0.95
                         scheduler = optax.exponential_decay(
                             init_value=lr_rate, 
-                            transition_steps=200,
-                            decay_rate=0.95)
+                            transition_steps=100,
+                            decay_rate=0.99)
 
                         # Combining gradient transforms using `optax.chain`.
                         gradient_transform = optax.chain(
@@ -223,7 +236,7 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
                
             costs_adam.append( cost_run )
             print(f"run: {j}, cost initial:{cost_initial}, best cost local:{best_cost_local}, cost final:{best_cost}")
-        
+        # exit()
         params_policy = np.copy(best_params)
             
         with open('new_rl.npy', 'wb') as f:
@@ -233,9 +246,9 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
 
 
 # Set up environment
-exp_name = "cartpole_new3_rl3_rbfactive_lr05init_mcpilco_diffrax"
-env_to_render = CustomCartPoleEnv(render_mode="human")
-env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_sigma_test_ideal" )
+exp_name = "cartpole_new4_rl3_test2_gponly_lr05init_mcpilco_diffrax"
+env_to_render = CustomCartPoleEnv(render_mode="rgb_array")
+env = RecordVideo( env_to_render, video_folder="/home/dasc/hardik/FORESEE", name_prefix=exp_name )
 observation, info = env.reset(seed=42)
 
 key = random.PRNGKey(100)
@@ -260,19 +273,19 @@ use_custom_gd = False
 use_jax_scipy = False
 n_restarts = 2#50#100
 iter_adam = 5000#4000#1000
-iters_adam = [4000, 4000, 4000, 4000, 4000]
+iters_adam = [2000, 2000, 2000, 2000, 2000, 2000]
 adam_start_learning_rate = 0.03#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
 
 adam_new_start_learning_rates = [0.05, 0.001, 0.0005]
-adam_old_start_learning_rates = [0.005, 0.001, 0.0005]
+adam_old_start_learning_rates = [0.001, 0.001, 0.0005]
 
 # sometimes good with adam 1000, time 0.05
 
 # RL setup
-num_trials = 5
-tf_trials = [3.0, 3.0, 3.0, 3.0, 3.0, 3.0]
-random_threshold = np.array([1.0, 0.0, 0.0, 0.0, 0.0, 3.0])
+num_trials = 7
+tf_trials = [3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0]
+random_threshold = np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
 # GP setup
 likelihoods = [0]*4
@@ -287,7 +300,7 @@ stds2 = [0]*4
 action = policy( state, params_policy ).reshape(-1,1)
 state_gp = np.array( [ state[0,0], state[1,0], state[3,0], np.sin(state[2,0]), np.cos(state[2,0]) ] )
 train_x = np.append(state_gp.reshape(1,-1), action.reshape(1,-1), axis=1)
-train_y = np.copy(state).reshape(1,-1)
+train_y = np.copy(0*state).reshape(1,-1)
 
 # t0 = time.time()
 # reward = get_future_reward( state, params_policy, dt_outer)
@@ -318,13 +331,15 @@ for run in range(num_trials):
             
         # next_state = step(state, action, dt_inner)
         next_state = step_with_diffrax(state, action, dt_inner)
+        diff = next_state - state
         env.set_state( (next_state[0,0].item(), next_state[1,0].item(), next_state[2,0].item(), next_state[3,0].item()) )
         env.render()  
         state_gp = np.array( [ state[0,0], state[1,0], state[3,0], np.sin(state[2,0]), np.cos(state[2,0]) ] )
         train_x = np.append( train_x, np.append(state_gp.reshape(1,-1), action.reshape(1,-1), axis=1), axis=0 )
-        train_y = np.append(train_y, next_state.reshape(1,-1), axis=0)
+        train_y = np.append(train_y, diff.reshape(1,-1), axis=0)
         
-        state = np.copy(next_state)
+        # state = np.copy(next_state)
+        state = np.array([ next_state[0,0], next_state[1,0], wrap_angle(next_state[2,0]), next_state[3,0] ]).reshape(-1,1)
         reward_trial = reward_trial + mc_pilco_reward(state)
         
         t = t + dt_inner
@@ -343,7 +358,7 @@ for run in range(num_trials):
                 ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r--', label = 'True values')
                 ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i] - 2* stds[i], mus[i] + 2* stds[i], alpha = 0.2, color="tab:orange", linewidth=1)
                 ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus2[i] - 2* stds2[i], mus2[i] + 2* stds2[i], alpha = 0.2, color="tab:green", linewidth=1)
-                ax[i].legend()
+        ax[0].legend()
         plt.savefig(exp_name + "run_plot_gp_iter_"+str(run)+".png")
               
     # Learn GP
@@ -366,7 +381,7 @@ for run in range(num_trials):
             ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r--', label = 'True values')
             ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i] - 2* stds[i], mus[i] + 2* stds[i], alpha = 0.2, color="tab:orange", linewidth=1)
             ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus2[i] - 2* stds2[i], mus2[i] + 2* stds2[i], alpha = 0.2, color="tab:green", linewidth=1)
-            ax[i].legend()
+    ax[0].legend()
     plt.savefig(exp_name + "plot_gp_iter_"+str(run)+".png")
     
     t0 = time.time()
@@ -387,14 +402,15 @@ for run in range(num_trials):
     print(f"first reward: {reward}, time: {time.time()-t0}")
     t0 = time.time()
     grads = get_future_reward_grad( state_init, params_policy, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[1:,:], train_y[1:,:])
-    print(f"first reward grad: time: {time.time()-t0}")
+    print(f"first reward grad: time: {time.time()-t0}, grad: {np.max(np.abs(grads))}")
+    # exit()
     
     # Train policy
     key, params_policy, costs_adam = train_policy( run, key, use_custom_gd = use_custom_gd, use_jax_scipy = use_jax_scipy, use_adam = use_adam, adam_start_learning_rate = adam_start_learning_rate, init_state = state_init, params_policy = params_policy, gp_params1 = learned_params[0], gp_params2 = learned_params[1], gp_params3 = learned_params[2], gp_params4 = learned_params[3], gp_train_x = train_x[1:,:], gp_train_y = train_y[1:,:] )
-    # fig, ax = plt.subplots(n_restarts)
-    # for i in range(n_restarts):
-    #     ax[i].plot( costs_adam[i] )
-    # plt.savefig(exp_name + "adam_loss_iter_"+str(run)+".png")
+    fig, ax = plt.subplots(n_restarts)
+    for i in range(n_restarts):
+        ax[i].plot( costs_adam[i] )
+    plt.savefig(exp_name + "adam_loss_iter_"+str(run)+".png")
     
    
     # Evaluate Policy

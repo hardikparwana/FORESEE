@@ -11,14 +11,14 @@ from matplotlib.animation import FFMpegWriter
 plt.rcParams.update({'font.size': 10})
 
 from utils.utils import *
-from cartpole_new3.gp_utils import * # initialize_gp, train_gp, predict_gp
-from cartpole_new3.cartpole_policy import policy, policy9, policy_grad, random_exploration, Sum_of_gaussians_initialize, random_policy
-from cartpole_new3.ut_utils.ut_utils import *
+from cartpole_new4.gp_utils import * # initialize_gp, train_gp, predict_gp
+from cartpole_new4.cartpole_policy import policy, policy9, policy_grad, random_exploration, Sum_of_gaussians_initialize, random_policy
+from cartpole_new4.ut_utils.ut_utils import *
 
 # visualization
 from robot_models.custom_cartpole_mc_pilco import CustomCartPoleEnv
 from robot_models.cartpole2D_mcpilco import step, get_next_states_from_dynamics
-from cartpole_new3.gym_wrappers.record_video import RecordVideo
+from cartpole_new4.gym_wrappers.record_video import RecordVideo
 
 key = random.PRNGKey(2)
 

@@ -2,9 +2,9 @@ import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as np
 from jax import jit, lax
-from robot_models.cartpole2D_mcpilco import get_state_dot_noisy, step_using_xdot, get_state_dot_noisy_rk4
-from cartpole_new3.gp_utils import predict_with_gp_params
-from cartpole_new3.cartpole_policy import policy
+from robot_models.cartpole2D_mcpilco import get_state_dot_noisy, step_using_xdot, get_state_dot_noisy_rk4, step_with_diffrax
+from cartpole_new4.gp_utils import predict_with_gp_params
+from cartpole_new4.cartpole_policy import policy
 from utils.utils import wrap_angle
 
 #check get_ut_cov_root_diagonal
@@ -89,26 +89,35 @@ def get_next_state_with_gp(state, control, gp_params1, gp_params2, gp_params3, g
 def get_next_states_with_gp( states, control_inputs, gps ):
     states_gp = np.concatenate( (states[0,:].reshape(1,-1), states[1,:].reshape(1,-1), states[3,:].reshape(1,-1), np.sin(states[2,:]).reshape(1,-1), np.cos(states[2,:]).reshape(1,-1)), axis=0 )
     test_x = np.append( states_gp, control_inputs.reshape(1,-1), axis=0 ).T
-    dt = 0.05
+    # dt = 0.05
     
+    # gp gives differences only
     pred2 = gps[1](test_x)
     mu2, var2 = pred2.mean(), pred2.variance()
     
     pred4 = gps[3](test_x)
     mu4, var4 = pred4.mean(), pred4.variance()
     
-     # pred1 = gps[0](test_x)
-    # mu1, var1 = pred1.mean(), pred1.variance()
+    pred1 = gps[0](test_x)
+    mu1, var1 = pred1.mean(), pred1.variance()
     # mu1, var1 = np.array([ states[0,:] + dt * states[1,:]  ]), np.zeros((1,9))
-    mu1, var1 = np.array([ states[0,:] + dt * states[1,:] + dt / 2 * mu2  ]), np.zeros((1,9))
+    # mu1, var1 = np.array([ states[0,:] + dt * states[1,:] + dt / 2 * mu2  ]), np.zeros((1,9))
     
-    # pred3 = gps[2](test_x)
-    # mu3, var3 = pred3.mean(), pred3.variance()
+    pred3 = gps[2](test_x)
+    mu3, var3 = pred3.mean(), pred3.variance()
     # mu3, var3 = np.array([ wrap_angle(states[2,:] + dt * states[3,:])  ]), np.zeros((1,9))
-    mu3, var3 = np.array([ states[2,:] + dt / 2 * states[3,:] + dt / 2 * mu4   ]), np.zeros((1,9))
+    # mu3, var3 = np.array([ states[2,:] + dt / 2 * states[3,:] + dt / 2 * mu4   ]), np.zeros((1,9))
     
-    return np.concatenate((mu1.reshape(1,-1), mu2.reshape(1,-1), mu3.reshape(1,-1), mu4.reshape(1,-1)), axis=0), np.concatenate( (var1.reshape(1,-1), var2.reshape(1,-1), var3.reshape(1,-1), var4.reshape(1,-1)), axis=0 )
+    return states+np.concatenate((mu1.reshape(1,-1), mu2.reshape(1,-1), mu3.reshape(1,-1), mu4.reshape(1,-1)), axis=0), np.concatenate( (var1.reshape(1,-1), var2.reshape(1,-1), var3.reshape(1,-1), var4.reshape(1,-1)), axis=0 )
     
+
+def get_next_states_with_diffrax(states, control_inputs, dt):
+    control_inputs = control_inputs.reshape(1,-1)
+    next_states = step_with_diffrax(states[:,0].reshape(-1,1), control_inputs[:,0].reshape(-1,1), dt)
+    next_covs = np.zeros((4,9))
+    for i in range(1,9):
+        next_states = np.append( next_states, step_with_diffrax(states[:,i].reshape(-1,1), control_inputs[:,i].reshape(-1,1), dt), axis=1 )
+    return next_states, next_covs
     
 @jit
 def sigma_point_expand_with_gp(sigma_points, weights, weights_cov, control, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):

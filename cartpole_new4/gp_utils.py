@@ -13,7 +13,8 @@ def initialize_gp(num_datapoints = 10):
     meanf = jgp.mean_functions.Zero()
     # kernel = jk.RBF(active_dims=[0,1,2,3,4]) * jk.Polynomial(active_dims=[0,1,2,3,4])
     # kernel = jk.RBF(active_dims=[0,1,2,3,4]) * jk.RationalQuadratic(active_dims=[0,1,2,3,4])
-    kernel = jk.RBF(active_dims=[0,1,2,3,4]) #* jk.Periodic(active_dims=[0,1,2,3,4])
+    kernel = jk.RBF(active_dims=[0,1,2,3,4,5]) #* jk.Periodic(active_dims=[0,1,2,3,4])
+    # kernel = jk.RBF() #* jk.Periodic()
     prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=num_datapoints )
     posterior = prior * likelihood
@@ -46,7 +47,8 @@ def initialize_gp_prediction_distribution(gp_params, train_x, train_y):
     meanf = jgp.mean_functions.Zero()
     # kernel = jk.RBF(active_dims=[0,1,2,3,4]) #* jk.Polynomial(active_dims=[0,1,2,3,4])
     # kernel = jk.RBF(active_dims=[0,1,2,3,4]) * jk.RationalQuadratic(active_dims=[0,1,2,3,4])
-    kernel = jk.RBF(active_dims=[0,1,2,3,4]) #* jk.Periodic(active_dims=[0,1,2,3,4])
+    kernel = jk.RBF(active_dims=[0,1,2,3,4,5]) #* jk.Periodic(active_dims=[0,1,2,3,4])
+    # kernel = jk.RBF() #* jk.Periodic()
     prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=train_x.shape[0] )
     posterior = prior * likelihood
@@ -58,7 +60,8 @@ def initialize_gp_prediction(gp_params, train_x, train_y):
     meanf = jgp.mean_functions.Zero()
     # kernel = jk.RBF(active_dims=[0,1,2,3,4]) #* jk.Polynomial(active_dims=[0,1,2,3,4])
     # kernel = jk.RBF(active_dims=[0,1,2,3,4]) * jk.RationalQuadratic(active_dims=[0,1,2,3,4])
-    kernel = jk.RBF(active_dims=[0,1,2,3,4]) #* jk.Periodic(active_dims=[0,1,2,3,4])
+    kernel = jk.RBF(active_dims=[0,1,2,3,4,5]) #* jk.Periodic(active_dims=[0,1,2,3,4])
+    # kernel = jk.RBF() #* jk.Periodic()
     prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=train_x.shape[0] )
     posterior = prior * likelihood
@@ -70,7 +73,8 @@ def predict_with_gp_params(gp_params, train_x, train_y, test_x):
     meanf = jgp.mean_functions.Zero()
     # kernel = jk.RBF(active_dims=[0,1,2,3,4]) * jk.Polynomial(active_dims=[0,1,2,3,4])
     # kernel = jk.RBF(active_dims=[0,1,2,3,4]) * jk.RationalQuadratic(active_dims=[0,1,2,3,4])
-    kernel = jk.RBF(active_dims=[0,1,2,3,4]) #* jk.Periodic(active_dims=[0,1,2,3,4])
+    kernel = jk.RBF(active_dims=[0,1,2,3,4,5]) #* jk.Periodic(active_dims=[0,1,2,3,4])
+    # kernel = jk.RBF() #* jk.Periodic()
     prior = jgp.Prior(mean_function=meanf, kernel = kernel)
     likelihood = jgp.Gaussian( num_datapoints=train_x.shape[0] )
     posterior = prior * likelihood
