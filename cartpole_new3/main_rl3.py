@@ -22,7 +22,7 @@ from cartpole_new3.gym_wrappers.record_video import RecordVideo
 
 key = random.PRNGKey(2)
 
-# @jit
+@jit
 def get_future_reward(X, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):
     states, weights, weights_cov = initialize_sigma_points(X)
     reward = 0
@@ -181,7 +181,8 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
             params_policy_temp = 0
             for i in range(iters_adam[run] + 1):
                 reset = reset + 1
-                
+                if i%200==0:
+                    print(f"start: {j}, iter : {i}")
                 grads = get_future_reward_grad( init_state, params_policy, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y)
                 # updates, opt_state = optimizer.update(grads, opt_state)
                 updates, opt_state = gradient_transform.update(grads, opt_state)           
@@ -193,7 +194,7 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
                 # horizon = 5
                 # if ((i>200)) and (run>0):# and (reset > horizon)):
                 #     if cost > cost_run[-1]+0.01:
-                if i==100:
+                if i==200:
                         lr_rate = adam_new_start_learning_rates[1]
                     # moving_average_cost_improvement = np.sum(  np.asarray(cost_run[-horizon:]) - np.asarray(cost_run[-horizon-1:-1])  )
                     # if moving_average_cost_improvement > 0: # bad learning rate
@@ -235,7 +236,7 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
                
             costs_adam.append( cost_run )
             print(f"run: {j}, cost initial:{cost_initial}, best cost local:{best_cost_local}, cost final:{best_cost}")
-        exit()
+        # exit()
         params_policy = np.copy(best_params)
             
         with open('new_rl.npy', 'wb') as f:
@@ -245,7 +246,7 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
 
 
 # Set up environment
-exp_name = "cartpole_new3_rl3_cpurbfactive_lr05init_mcpilco_diffrax"
+exp_name = "cartpole_new3_rl3_gponly_lr05init_mcpilco_diffrax"
 env_to_render = CustomCartPoleEnv(render_mode="human")
 env = RecordVideo( env_to_render, video_folder="/home/hardik/Desktop/Research/FORESEE/", name_prefix="cartpole_sigma_test_ideal" )
 observation, info = env.reset(seed=42)
@@ -272,18 +273,18 @@ use_custom_gd = False
 use_jax_scipy = False
 n_restarts = 2#50#100
 iter_adam = 5000#4000#1000
-iters_adam = [4000, 4000, 4000, 4000, 4000]
+iters_adam = [2000, 2000, 2000, 2000, 2000, 2000]
 adam_start_learning_rate = 0.03#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
 
 adam_new_start_learning_rates = [0.05, 0.001, 0.0005]
-adam_old_start_learning_rates = [0.005, 0.001, 0.0005]
+adam_old_start_learning_rates = [0.01, 0.001, 0.0005]
 
 # sometimes good with adam 1000, time 0.05
 
 # RL setup
 num_trials = 5
-tf_trials = [0.5, 3.0, 3.0, 3.0, 3.0, 3.0]
+tf_trials = [3.0, 3.0, 3.0, 3.0, 3.0, 3.0]
 random_threshold = np.array([1.0, 0.0, 0.0, 0.0, 0.0, 3.0])
 
 # GP setup
@@ -355,7 +356,7 @@ for run in range(num_trials):
                 ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r--', label = 'True values')
                 ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i] - 2* stds[i], mus[i] + 2* stds[i], alpha = 0.2, color="tab:orange", linewidth=1)
                 ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus2[i] - 2* stds2[i], mus2[i] + 2* stds2[i], alpha = 0.2, color="tab:green", linewidth=1)
-                ax[i].legend()
+        ax[0].legend()
         plt.savefig(exp_name + "run_plot_gp_iter_"+str(run)+".png")
               
     # Learn GP
@@ -378,7 +379,7 @@ for run in range(num_trials):
             ax[i].plot(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), train_y[1:,i], 'r--', label = 'True values')
             ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus[i] - 2* stds[i], mus[i] + 2* stds[i], alpha = 0.2, color="tab:orange", linewidth=1)
             ax[i].fill_between(np.linspace(0, train_x[1:,:].shape[0], train_x[1:,:].shape[0]), mus2[i] - 2* stds2[i], mus2[i] + 2* stds2[i], alpha = 0.2, color="tab:green", linewidth=1)
-            ax[i].legend()
+    ax[0].legend()
     plt.savefig(exp_name + "plot_gp_iter_"+str(run)+".png")
     
     t0 = time.time()

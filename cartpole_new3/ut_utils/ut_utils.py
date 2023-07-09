@@ -2,7 +2,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as np
 from jax import jit, lax
-from robot_models.cartpole2D_mcpilco import get_state_dot_noisy, step_using_xdot, get_state_dot_noisy_rk4
+from robot_models.cartpole2D_mcpilco import get_state_dot_noisy, step_using_xdot, get_state_dot_noisy_rk4, step_with_diffrax
 from cartpole_new3.gp_utils import predict_with_gp_params
 from cartpole_new3.cartpole_policy import policy
 from utils.utils import wrap_angle
@@ -109,6 +109,14 @@ def get_next_states_with_gp( states, control_inputs, gps ):
     
     return np.concatenate((mu1.reshape(1,-1), mu2.reshape(1,-1), mu3.reshape(1,-1), mu4.reshape(1,-1)), axis=0), np.concatenate( (var1.reshape(1,-1), var2.reshape(1,-1), var3.reshape(1,-1), var4.reshape(1,-1)), axis=0 )
     
+
+def get_next_states_with_diffrax(states, control_inputs, dt):
+    control_inputs = control_inputs.reshape(1,-1)
+    next_states = step_with_diffrax(states[:,0].reshape(-1,1), control_inputs[:,0].reshape(-1,1), dt)
+    next_covs = np.zeros((4,9))
+    for i in range(1,9):
+        next_states = np.append( next_states, step_with_diffrax(states[:,i].reshape(-1,1), control_inputs[:,i].reshape(-1,1), dt), axis=1 )
+    return next_states, next_covs
     
 @jit
 def sigma_point_expand_with_gp(sigma_points, weights, weights_cov, control, gp_params1, gp_params2, gp_params3, gp_params4, gp_train_x, gp_train_y):

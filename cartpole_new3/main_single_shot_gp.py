@@ -261,7 +261,7 @@ optimize_offline = True
 use_adam = True
 use_custom_gd = False
 use_jax_scipy = False
-n_restarts = 1#50#100
+n_restarts = 10#50#100
 iter_adam = 5000#4000#1000
 iters_adam = [4000, 4000, 4000, 4000, 4000]
 adam_start_learning_rate = 0.02#0.05#0.001
@@ -273,7 +273,7 @@ adam_old_start_learning_rates = [0.01, 0.001, 0.0005]
 # sometimes good with adam 1000, time 0.05
 
 # RL setup
-num_trials = 10
+num_trials = 1
 tf_trials = [3.0, 3.0, 3.0, 3.0, 3.0]
 random_threshold = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
 
@@ -297,7 +297,7 @@ train_y = np.copy(state).reshape(1,-1)
 # reward = get_future_reward( state, params_policy, dt_outer)
 # grads = get_future_reward_grad( state, params_policy, dt_outer )
 # print(f"initial reward: {reward}, grad:{np.max(np.abs(grads))}, time to jit:{ time.time()-t0 }")
-num_data = 200
+num_data = 500
 for run in range(num_trials):
     
     # Collect Data
@@ -336,7 +336,7 @@ for run in range(num_trials):
         if 1:#((i==1) or (i==3)):
             likelihoods[i], posteriors[i], parameter_states[i] = initialize_gp(num_datapoints = train_x.shape[0]) 
             likelihoods[i], posteriors[i], learned_params[i], Ds[i] = train_gp( likelihoods[i], posteriors[i], parameter_states[i], train_x, train_y[:,i].reshape(-1,1) )      
-            print(f"GP : {i}, params: {learned_params[i]}")
+            # print(f"GP : {i}, params: {learned_params[i]}")
     # exit()
       # Evaluate GPS
     plt.ioff()
@@ -365,7 +365,11 @@ for run in range(num_trials):
     
     # Train policy
     key, params_policy, costs_adam = train_policy( run, key, use_custom_gd = use_custom_gd, use_jax_scipy = use_jax_scipy, use_adam = use_adam, adam_start_learning_rate = adam_start_learning_rate, init_state = state_init, params_policy = params_policy, gp_params1 = learned_params[0], gp_params2 = learned_params[1], gp_params3 = learned_params[2], gp_params4 = learned_params[3], gp_train_x = train_x[:,:], gp_train_y = train_y[:,:] )
-   
+    fig, ax = plt.subplots(n_restarts)
+    for i in range(n_restarts):
+        ax[i].plot( costs_adam[i] )
+    plt.savefig(exp_name + "adam_loss_iter_"+str(run)+".png")
+
     # Evaluate Policy
     reward = get_future_reward( state_init, params_policy, learned_params[0], learned_params[1], learned_params[2], learned_params[3], train_x[:,:], train_y[:,:] )
     print(f"Run : {run} reward is : {reward}")
