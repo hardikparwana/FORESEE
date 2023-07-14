@@ -89,7 +89,7 @@ def get_next_state_with_gp(state, control, gp_params1, gp_params2, gp_params3, g
 def get_next_states_with_gp( states, control_inputs, gps ):
     states_gp = np.concatenate( (states[0,:].reshape(1,-1), states[1,:].reshape(1,-1), states[3,:].reshape(1,-1), np.sin(states[2,:]).reshape(1,-1), np.cos(states[2,:]).reshape(1,-1)), axis=0 )
     test_x = np.append( states_gp, control_inputs.reshape(1,-1), axis=0 ).T
-    # dt = 0.05
+    dt = 0.05
     
     # gp gives differences only
     pred2 = gps[1](test_x)
@@ -98,15 +98,15 @@ def get_next_states_with_gp( states, control_inputs, gps ):
     pred4 = gps[3](test_x)
     mu4, var4 = pred4.mean(), pred4.variance()
     
-    pred1 = gps[0](test_x)
-    mu1, var1 = pred1.mean(), pred1.variance()
+    # pred1 = gps[0](test_x)
+    # mu1, var1 = pred1.mean(), pred1.variance()
     # mu1, var1 = np.array([ states[0,:] + dt * states[1,:]  ]), np.zeros((1,9))
-    # mu1, var1 = np.array([ states[0,:] + dt * states[1,:] + dt / 2 * mu2  ]), np.zeros((1,9))
+    mu1, var1 = dt / 2 * states[1,:] + dt / 2 * (states[1,:]+mu2), np.zeros((1,9))
     
-    pred3 = gps[2](test_x)
-    mu3, var3 = pred3.mean(), pred3.variance()
+    # pred3 = gps[2](test_x)
+    # mu3, var3 = pred3.mean(), pred3.variance()
     # mu3, var3 = np.array([ wrap_angle(states[2,:] + dt * states[3,:])  ]), np.zeros((1,9))
-    # mu3, var3 = np.array([ states[2,:] + dt / 2 * states[3,:] + dt / 2 * mu4   ]), np.zeros((1,9))
+    mu3, var3 = dt / 2 * states[3,:] + dt / 2 * (states[3,:]+mu4), np.zeros((1,9))
     
     return states+np.concatenate((mu1.reshape(1,-1), mu2.reshape(1,-1), mu3.reshape(1,-1), mu4.reshape(1,-1)), axis=0), np.concatenate( (var1.reshape(1,-1), var2.reshape(1,-1), var3.reshape(1,-1), var4.reshape(1,-1)), axis=0 )
     

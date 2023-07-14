@@ -207,8 +207,8 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
                         lr_rate = lr_rate * 0.95
                         scheduler = optax.exponential_decay(
                             init_value=lr_rate, 
-                            transition_steps=100,
-                            decay_rate=0.99)
+                            transition_steps=200,
+                            decay_rate=0.95)
 
                         # Combining gradient transforms using `optax.chain`.
                         gradient_transform = optax.chain(
@@ -246,12 +246,12 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
 
 
 # Set up environment
-exp_name = "cartpole_new4_rl3_test2_gponly_lr05init_mcpilco_diffrax"
+exp_name = "cartpole_new4_rl3_test2_gp24only_lr05init_mcpilco_diffrax"
 env_to_render = CustomCartPoleEnv(render_mode="rgb_array")
 env = RecordVideo( env_to_render, video_folder="/home/dasc/hardik/FORESEE", name_prefix=exp_name )
 observation, info = env.reset(seed=42)
 
-key = random.PRNGKey(100)
+# key = random.PRNGKey(100)
 key, subkey = random.split(key)
 policy_type = 'with angles'
 key, params_policy =  Sum_of_gaussians_initialize(subkey, state_dim=4, input_dim=1, type = policy_type, lengthscale = 1)
@@ -273,7 +273,7 @@ use_custom_gd = False
 use_jax_scipy = False
 n_restarts = 2#50#100
 iter_adam = 5000#4000#1000
-iters_adam = [2000, 2000, 2000, 2000, 2000, 2000]
+iters_adam = [2000, 2000, 2000, 2000, 2000, 2000, 2000]
 adam_start_learning_rate = 0.03#0.05#0.001
 custom_gd_lr_rate = 0.005#0.5
 
