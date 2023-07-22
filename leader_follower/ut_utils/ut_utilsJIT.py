@@ -196,6 +196,7 @@ def unicycle_SI2D_cbf_fov_condition_evaluator( robotJ_state, robotK_state, robot
     # print(f"h1:{h1}, , h2:{h2}, h3:{h3}, dh_dx1:{dh1_dxj}, dh_dxk:{ dh1_dxk } ")
     
     return A, B
+unicycle_SI2D_cbf_fov_condition_evaluator_jit = torch.jit.trace( unicycle_SI2D_cbf_fov_condition_evaluator, (torch.ones(3,1), torch.ones(2,1), torch.ones(2,1), torch.ones(3)) )
 
 def unicycle_SI2D_clf_condition_evaluator( robotJ_state, robotK_state, robotK_state_dot, k_torch ):
     V, dV_dxj, dV_dxk = unicycle_SI2D_lyapunov_tensor_jit( robotJ_state, robotK_state )
@@ -214,6 +215,7 @@ def unicycle_SI2D_clf_cbf_fov_evaluator( robotJ_state, robotK_state, robotK_stat
     A = torch.cat( (A1, A2), dim=0 )
     
     return A, B
+unicycle_SI2D_clf_cbf_fov_evaluator_jit = torch.jit.trace( unicycle_SI2D_clf_cbf_fov_evaluator, (torch.ones(3,1), torch.ones(2,1), torch.ones(2,1), torch.ones(1), torch.ones(3)) )
     
 def unicycle_SI2D_UT_Mean_Evaluator(  robotJ_state, robotK_sigma_points, robotK_dot_sigma_points, robotK_weights, k_torch, alpha_torch ):
     

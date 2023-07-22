@@ -30,7 +30,7 @@ def sigma_der_torch(s):
     k1 = 2
     return -torch.div ( torch.exp(k1-s),( 1+torch.exp( k1-s ) ) ) @ ( 1 + sigma_torch(s) )
 
-@torch.jit.script
+# @torch.jit.script
 def unicycle_SI2D_lyapunov_tensor_jit(X, G):
     min_D = 0.3
     max_D = 2.0
@@ -43,7 +43,7 @@ def unicycle_SI2D_lyapunov_tensor_jit(X, G):
     
     return V, dV_dxi, dV_dxj
 
-@torch.jit.script
+# @torch.jit.script
 def unicycle_SI2D_barrier_torch_jit(X, targetX): # target is unicycle
     beta = 1.01
     min_D = 0.3
@@ -63,7 +63,7 @@ def unicycle_SI2D_barrier_torch_jit(X, targetX): # target is unicycle
     
     return -h_final, -dh_dxi, -dh_dxj
     
-@torch.jit.script
+# @torch.jit.script
 def unicycle_SI2D_barrier_torch_jit(X, targetX): # target is unicycle
     beta = 1.01
     min_D = 0.3
@@ -83,14 +83,14 @@ def unicycle_SI2D_barrier_torch_jit(X, targetX): # target is unicycle
     
     return -h_final, -dh_dxi, -dh_dxj
 
-@torch.jit.script
+# @torch.jit.script
 def unicycle_SI2D_fov_barrier_jit(X, targetX):
     
     # print(f"X:{X}, targetX:{targetX}")
     
     max_D = 2.0
     min_D = 0.3
-    FoV_angle = 3.14157/3
+    FoV_angle = torch.tensor(3.14157/3)
     
     # Max distance
     h1 = max_D**2 - torch.square( torch.norm( X[0:2] - targetX[0:2] ) )
@@ -151,7 +151,7 @@ def unicycle_compute_reward_jit(X,targetX):
     
     max_D = 2.0
     min_D = 0.3
-    FoV_angle = 3.13/3    
+    FoV_angle = torch.tensor(3.13/3)
 
     p = targetX[0:2] - X[0:2]
     dir_vector = torch.cat( ( torch.cos(X[2,0]).reshape(-1,1), torch.sin(X[2,0]).reshape(-1,1) ) )
