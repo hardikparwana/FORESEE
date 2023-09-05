@@ -7,6 +7,11 @@ Authors: Hardik Parwana and Dimitra Panagou, University of Michigan
 
 Note: This repo is under development. While all the relevant code is present, we will work on making it more readable and customizable soon! Stay Tuned! Please raise an issue or send me an email if you run into issues before this documentation is ready. I am happy to help adapt this algorithm to suit your needs!
 
+## State Prediction with Stochastic (Uncertain) Dynamics
+
+![uncertainty_propagation_tro](https://github.com/hardikparwana/FORESEE/assets/19849515/264e06ee-5edf-4393-b71e-35ad73617086)
+
+
 ## Trajectory Optimization for Stochastic (Uncertain) Dynamics
 
 | Constraint Satisfaction in Expectation | Constraint Satisfactyion with Confidence Interval | 
