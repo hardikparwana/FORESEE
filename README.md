@@ -1,28 +1,39 @@
 # FORESEE(4C): Foresee for Certified Constrained Control
-hello thank u
 
 This repository implements our TRO 2023 submission on 
 **FORESEE: Prediction with Expansion-Compression Unscented Transform for Online Policy Optimization**
 
 Authors: Hardik Parwana and Dimitra Panagou, University of Michigan
 
-Note: this repo is under development. While all the relevant code is present, we will work on making it more readable and customizable soon! Stay Tuned! Please raise an issue or send me an email if you run into issues before this documentation is ready. I am happy to help adapt this algorithm to suit your needs!
+Note: This repo is under development. While all the relevant code is present, we will work on making it more readable and customizable soon! Stay Tuned! Please raise an issue or send me an email if you run into issues before this documentation is ready. I am happy to help adapt this algorithm to suit your needs!
 
 ## Dependencies
-The implementation has been done in Python 3.8 at the time of writing this document. PyTorch's JIT feature was used to speed up computations wherever possible. The following packages were used
+
+For Pytorch code, the following dependencies are required:
+- Python version 3.8
 - numpy==1.22.3 
 - gym==0.26.0 
 - gym-notices==0.0.8 
 - gym-recording==0.0.1 
 - gpytorch==1.8.1 
-- torch==1.12.1 
+- torch==1.12.1 ( PyTorch's JIT feature was used to speed up computations wherever possible.)
 - pygame==2.1.2 
 - gurobipy==9.5.1 
 - cvxpy==1.2.0 
 - cvxpylayers==0.1.5 
 - cartpole==0.0.1
 
-You will also have to add source directory to PYTHONPATH. Note that relevant gym environment for cartpole simulation is already part of this repo. This was done to change the discreet action space to continuous action space and to change physical properties of the objects.
+For JAX code, the following dependencies are required
+- Python 3.11
+- numpy==1.22.3 matplotlib sympy argparse scipy==1.10.1
+- cvxpy==1.2.0 cvxpylayers==0.1.5 gym==0.26.0 gym-notices==0.0.8 gym-recording==0.0.1 moviepy==1.0.3 cyipopt==1.2.0 jax==0.4.13 jaxlib==0.4.11 gpjax==0.5.9 optax==0.1.4 jaxopt
+- diffrax==0.3.0
+- pygame==2.3.0
+
+  We also provide a Dockefile in the `docker_files` and 311_requirements.txt file for Python3.11 dependencies that can be used to run JAX examples
+
+
+Note that you will also have to add a source directory to PYTHONPATH as there is no setup.py file provided yet. Note that the relevant gym environment for cartpole simulation is already part of this repo. This was done to change the discreet action space to a continuous action space and to change the physical properties of the objects.
 
 ## Running the Code
 We will be adding interactive jupyter notebooks soon! In the meantime, try out our scripts (comments to be addded soon!)
