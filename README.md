@@ -9,7 +9,7 @@ Note: This repo is under development. While all the relevant code is present, we
 
 ## Trajectory Optimization for Stochastic (Uncertain) Dynamics
 
-| Constraint Satisfaction in Expectation | Constraint SatisfactyionWith adaptation | 
+| Constraint Satisfaction in Expectation | Constraint Satisfactyion with Confidence Interval | 
 | -------------------| -----------------|
 | ![mpc_ss_mean_obj1](https://github.com/hardikparwana/FORESEE/assets/19849515/ca992d95-78e7-42d7-9b59-d441f5dae56a) | ![mpc_ss_ci_obj1_v2](https://github.com/hardikparwana/FORESEE/assets/19849515/7c850479-8406-4a60-9913-c5d471cfc534) |
 
