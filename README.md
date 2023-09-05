@@ -1,7 +1,8 @@
 # FORESEE(4C): Foresee for Certified Constrained Control
 
-This repository implements our TRO 2023 submission on 
+This repository complements our TRO 2023 submission on
 **FORESEE: Prediction with Expansion-Compression Unscented Transform for Online Policy Optimization**
+with videos and plots. 
 
 Authors: Hardik Parwana and Dimitra Panagou, University of Michigan
 
