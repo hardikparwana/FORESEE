@@ -7,7 +7,7 @@ Authors: Hardik Parwana and Dimitra Panagou, University of Michigan
 
 Note: This repo is under development. While all the relevant code is present, we will work on making it more readable and customizable soon! Stay Tuned! Please raise an issue or send me an email if you run into issues before this documentation is ready. I am happy to help adapt this algorithm to suit your needs!
 
-## Trajectory OPtimization for Stochastic (Uncertain) Dynamics
+## Trajectory Optimization for Stochastic (Uncertain) Dynamics
 
 ![mpc_ss_mean_obj1](https://github.com/hardikparwana/FORESEE/assets/19849515/ca992d95-78e7-42d7-9b59-d441f5dae56a)
 
