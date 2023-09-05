@@ -1,10 +1,8 @@
 # FORESEE(4C): Foresee for Certified Constrained Control
 hello
 
-This repository implements our ICRA 2023 submission on 
-
-**FORESEE: Model-based Reinforcement Learning using Unscented Transform with application to Tuning of Control Barrier Functions**
-A pre-print version is available [here](https://arxiv.org/abs/2209.12644).
+This repository implements our TRO 2023 submission on 
+**FORESEE: Prediction with Expansion-Compression Unscented Transform for Online Policy Optimization**
 
 Authors: Hardik Parwana and Dimitra Panagou, University of Michigan
 
