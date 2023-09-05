@@ -1,4 +1,4 @@
-# FORESEE(4C): Fore<span style="color:red"> see </span> see for Certified Constrained Control
+# FORESEE(4C): Fore*see* for *C*ertified *C*onstrained *C*ontrol
 
 This repository complements our TRO 2023 submission on
 **FORESEE: Prediction with Expansion-Compression Unscented Transform for Online Policy Optimization**
