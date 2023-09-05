@@ -7,6 +7,24 @@ Authors: Hardik Parwana and Dimitra Panagou, University of Michigan
 
 Note: This repo is under development. While all the relevant code is present, we will work on making it more readable and customizable soon! Stay Tuned! Please raise an issue or send me an email if you run into issues before this documentation is ready. I am happy to help adapt this algorithm to suit your needs!
 
+## Trajectory OPtimization for Stochastic (Uncertain) Dynamics
+
+![mpc_ss_mean_obj1](https://github.com/hardikparwana/FORESEE/assets/19849515/ca992d95-78e7-42d7-9b59-d441f5dae56a)
+
+![mpc_ss_ci_obj1_v2](https://github.com/hardikparwana/FORESEE/assets/19849515/7c850479-8406-4a60-9913-c5d471cfc534)
+
+
+## CBF tuning for Leader-Follower
+Th objective for the follower is to keep leader inside the field-of-view and, preferably, at the center. Adaptation is needed as depending on the pattern of leader's movement, different policy parameters perform better. The policy here is a CBF-CLF-QP that is to be satisfied in expectation when dynamics is uncertain. The first sim shows the performance of default parameters. The second one shows improvemwnt with our adaptation running online. Results change significantly when control input bounds are imposed. The QP does not even exhibit a solution after some time when default parameters are used and the simulation ends. The proposed algorithm is able toadapt parameters online to continuously satisfy input bounds. The prediction horizon is taken to be 20 time steps.
+
+|  | No Adaptation | With adaptation |
+| --------------| -------------------| -----------------|
+| No input bound | ![no_adapt_no_bound](https://user-images.githubusercontent.com/19849515/192348004-6dcbf70f-2db5-49dd-9f4f-04370dc028e4.gif) | ![adapt_no_bound](https://user-images.githubusercontent.com/19849515/192348165-5f6fbaf4-81e1-4cd6-893f-d5f763ea9cbc.gif) |
+| With input bounds | ![no_adapt_with_bound](https://user-images.githubusercontent.com/19849515/192348231-a921fa36-6198-45b5-94c2-80ae87ab8b39.gif) | ![adapt_with_bound](https://user-images.githubusercontent.com/19849515/192348335-448600b8-042b-4bb5-8c9f-17e654584336.gif)
+
+
+
+
 ## Dependencies
 
 For Pytorch code, the following dependencies are required:
@@ -71,13 +89,6 @@ In our first example, we randomly initialize the parameters of policy and then t
 [https://user-images.githubusercontent.com/19849515/192346448-6c2d450f-03a1-4d46-9f1b-ab653c9f1902.mp4](https://user-images.githubusercontent.com/19849515/192346448-6c2d450f-03a1-4d46-9f1b-ab653c9f1902.mp4)
 
 
-## CBF tuning for Leader-Follower
-Th objective for the follower is to keep leader inside the field-of-view and, preferably, at the center. Adaptation is needed as depending on the pattern of leader's movement, different policy parameters perform better. The policy here is a CBF-CLF-QP that is to be satisfied in expectation when dynamics is uncertain. The first sim shows the performance of default parameters. The second one shows improvemwnt with our adaptation running online. Results change significantly when control input bounds are imposed. The QP does not even exhibit a solution after some time when default parameters are used and the simulation ends. The proposed algorithm is able toadapt parameters online to continuously satisfy input bounds. The prediction horizon is taken to be 20 time steps.
-
-|  | No Adaptation | With adaptation |
-| --------------| -------------------| -----------------|
-| No input bound | ![no_adapt_no_bound](https://user-images.githubusercontent.com/19849515/192348004-6dcbf70f-2db5-49dd-9f4f-04370dc028e4.gif) | ![adapt_no_bound](https://user-images.githubusercontent.com/19849515/192348165-5f6fbaf4-81e1-4cd6-893f-d5f763ea9cbc.gif) |
-| With input bounds | ![no_adapt_with_bound](https://user-images.githubusercontent.com/19849515/192348231-a921fa36-6198-45b5-94c2-80ae87ab8b39.gif) | ![adapt_with_bound](https://user-images.githubusercontent.com/19849515/192348335-448600b8-042b-4bb5-8c9f-17e654584336.gif)
 
 
 ## Experiments for CBF policy based Leader Follower
