@@ -87,8 +87,8 @@ Our approach involves following three steps:
 
 **Step 3:** We use Seqential Quadratic Programming type of update to use policy gradients in a way that help maintain constraints that were already satisfied by current policy. If current policy is unable to satisfy a constraint, then reward is designed to reduce the infeasibility margin of this unsatisfiable constraint.  
 
-## CartPole Swingup
-In our first example, we randomly initialize the parameters of policy and then try to learn parameters online (in receding horizon fashion) that stabilizes the pole in upright position. Only a horizontal force on the cart can be applied. Only an uncertain dynamics model is available to the system. We run our algorithm for unconstrained as well as constrained cart position. The prediction horizon is taken to be 30 time steps.
+## Additional Example: CartPole Swingup
+In this example, we randomly initialize the parameters of the policy and then try to learn parameters online (in receding horizon fashion) that stabilize the pole in upright position. The policy used is taken from PILCO[1] Only a horizontal force on the cart can be applied. Only an uncertain dynamics model is available to the system. We run our algorithm for unconstrained as well as constrained cart position. The prediction horizon is taken to be 30 time steps.
 
 - Unconstrained: X axis range (0,12) in animation
 
@@ -99,9 +99,10 @@ In our first example, we randomly initialize the parameters of policy and then t
 [https://user-images.githubusercontent.com/19849515/192346448-6c2d450f-03a1-4d46-9f1b-ab653c9f1902.mp4](https://user-images.githubusercontent.com/19849515/192346448-6c2d450f-03a1-4d46-9f1b-ab653c9f1902.mp4)
 
 
+## References
+[1] Deisenroth, Marc, and Carl E. Rasmussen. "PILCO: A model-based and data-efficient approach to policy search." Proceedings of the 28th International Conference on machine learning (ICML-11). 2011.
 
-
-## Experiments for CBF policy based Leader Follower
+<!-- ## Experiments for CBF policy based Leader Follower
 We also perform experiments with 2 AION R1 UGV rovers. The leader robot is moved manually by the user. Gaussian Process(GP) is used to learn the motion of leader as a function of time based on past observations. The GP dynamics model is then passed on to the follower that uses this model to predict future and apply our proposed algorithm.
 
-Each AION UGV is equipped with pixhawk board running custom px4 firmware for unicycle type of velocity control.
+Each AION UGV is equipped with pixhawk board running custom px4 firmware for unicycle type of velocity control. -->
