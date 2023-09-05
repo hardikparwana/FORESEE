@@ -9,9 +9,10 @@ Note: This repo is under development. While all the relevant code is present, we
 
 ## State Prediction with Stochastic (Uncertain) Dynamics
 
-We propose a new method for numerical prediction of future states under generic stochastic dynamical systems, i.e, nonlinear dynamical systems with state-dependent disturbance. We use a sampling-based approach, namely Unscented Transform to do so. Previous approaches with UT only had state-independent uncertainty. Presence of state-dependent uncertainty requires to increase the number of samples, aka sigma points in UT, to grow with time. This leads to an unscalable approach. Therefore we propose Expansion-Contraction layers where
-- Expansion Layer: maps each sigma point to multiple sigma points according to the disturbance level at that point. This leads to increase in total number of points.
+We propose a new method for numerical prediction of future states under generic stochastic dynamical systems, i.e, nonlinear dynamical systems with state-dependent disturbance. We use a sampling-based approach, namely Unscented Transform to do so. Previous approaches with UT only had state-independent uncertainty. The presence of state-dependent uncertainty necessiates to increase the number of samples, aka sigma points in UT, to grow with time. This leads to an unscalable approach. Therefore we propose Expansion-Contraction layers where
+- Expansion Layer: maps each sigma point to multiple sigma points according to the disturbance level at that point. This leads to an increase in the total number of points.
 - Compression Layer: uses moment matching to find a smaller number of sigma points that have the same moments as the expanded points
+A sequence of Expansion-Compression layer is used for multi-step prediction. Our layers are completely differentiable and hence can be used for policy optimization.  Finally, we also propose an online gradient descent scheme for policy optimization.
 
 ![uncertainty_propagation_tro](https://github.com/hardikparwana/FORESEE/assets/19849515/264e06ee-5edf-4393-b71e-35ad73617086)
 
