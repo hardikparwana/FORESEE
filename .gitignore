@@ -28,3 +28,4 @@ cartpole_new3/__pycache__/*
 cartpole_new2/gym_wrappers/monitoring/__pycache__/*
 */__pycache__/*
 *.pyc
+media/
