@@ -28,3 +28,7 @@ RUN python3.11 -m pip install jax==0.4.13 jaxlib==0.4.11
 RUN python3.11 -m pip install diffrax==0.3.0
 RUN python3.11 -m pip install pygame==2.3.0
 RUN python3.11 -m pip install jax[cuda11_pip]==0.4.13 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+#COPY ../paper_codes/MPCC/C++/install.sh /home/install.sh
+#WORKDIR /home
+#RUN ./install.sh

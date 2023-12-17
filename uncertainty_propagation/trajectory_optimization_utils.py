@@ -9,7 +9,6 @@ import numpy as np
 def step(x,u,dt):
     return x+u*dt
 
-
 def dynamics_step( base_term, state_dot, dt ):
     next_state = base_term + state_dot * dt
 #     print(f"next_state:{next_state}")
@@ -118,18 +117,40 @@ def generate_sigma_points_gaussian( mu, cov_root, base_term, factor ):
     beta = 0.0#2.0#2.0 # optimal for gaussian
     k = 1.0
     Lambda = alpha**2 * ( n+k ) - n
-    new_points = dynamics_step(base_term, mu, factor) # new_points = base_term + factor * mu
-    new_weights = jnp.array([[1.0*Lambda/(n+Lambda)]])    
-    new_weights_cov = jnp.array([[ 1.0*Lambda/(n+Lambda) + 1 - alpha**2 + beta]])
-    for i in range(n):
-        new_points = jnp.append( new_points, dynamics_step(base_term, (mu - jnp.sqrt(n+Lambda) * cov_root[:,i].reshape(-1,1)), factor) , axis = 1 )
-        new_points = jnp.append( new_points, dynamics_step(base_term, (mu + jnp.sqrt(n+Lambda) * cov_root[:,i].reshape(-1,1)), factor) , axis = 1 )
-        new_weights = jnp.append( new_weights, jnp.array([[1.0/(n+Lambda)/2.0]]), axis = 1 )
-        new_weights = jnp.append( new_weights, jnp.array([[1.0/(n+Lambda)/2.0]]), axis = 1 )
-        new_weights_cov = jnp.append( new_weights_cov, jnp.array([[1.0/(n+Lambda)/2.0]]), axis = 1 )
-        new_weights_cov = jnp.append( new_weights_cov, jnp.array([[1.0/(n+Lambda)/2.0]]), axis = 1 )
+    
+    points0 = base_term + mu * dt
+    points1 = base_term + base_term + (mu + jnp.sqrt(n+Lambda) * cov_root)*factor
+    points1 = base_term + base_term + (mu - jnp.sqrt(n+Lambda) * cov_root)*factor
+    
+    weights0 = jnp.array([[ 1.0*Lambda/(n+Lambda) ]])
+    weights1 = jnp.ones((1,n)) * 1.0/(n+Lambda)/2.0
+    weights2 = jnp.ones((1,n)) * 1.0/(n+Lambda)/2.0
+    
+    new_points = jnp.concatenate((points0, points1, points2), axis=1)
+    new_weights = jnp.concatenate((weights0, weights1, weights2), axis=1)
+    
+    return new_points, new_weights    
+    
+    # new_points = jnp.zeros((n,N))
+    # new_weights = jnp.zeros((1,N))
+    # new_weights_cov = jnp.zeros((1,N))
+    
+    # new_points = new_points.at[:,0].set(dynamics_step(base_term, mu, factor))
+    # new_weights = new_weights.at[0,0].set(1.0*Lambda/(n+Lambda))
+    # new_weights_cov = new_weights_cov[0,0].set(1.0*Lambda/(n+Lambda))
+    # def body(i, inputs):
+        
+    #     new_points, new_weights, new_weights_cov = inputs
+    #     new_points = new_points.at[:,2*i-1].set(dynamics_step(base_term, (mu - jnp.sqrt(n+Lambda) * cov_root[:,i].reshape(-1,1)), factor))
+    #     new_points = new_points.at[:,2*i].set(  dynamics_step(base_term, (mu + jnp.sqrt(n+Lambda) * cov_root[:,i].reshape(-1,1)), factor))
+    #     new_weights = new_weights.at[0,2*i-1].set(1.0/(n+Lambda)/2.0)
+    #     new_weights = new_weights.at[0,2*i].set(  1.0/(n+Lambda)/2.0)
+    #     new_weights_cov = new_weights_cov[0,2*i-1].set(1.0/(n+Lambda)/2.0)
+    #     new_weights_cov = new_weights_cov[0,2*i].set(1.0/(n+Lambda)/2.0)   
+        
+    #     return new_points, new_weights, new_weights_cov
 
-    return new_points, new_weights
+    # return lax.fori_loop(0, n, body, (new_points, new_weights, new_weights_cov))
 
 @jit
 def generate_sigma_points_gaussian_GenUT( mu, cov_root, skewness, kurt, base_term, factor ):
@@ -146,9 +167,9 @@ def generate_sigma_points_gaussian_GenUT( mu, cov_root, skewness, kurt, base_ter
     
     U = jnp.diag(u[:,0])
     V = jnp.diag(v[:,0])
-    points0 = mu    
-    points1 = mu - cov_root @ U
-    points2 = mu + cov_root @ V
+    points0 = base_term + mu * factor
+    points1 = base_term + (mu - cov_root @ U) * factor
+    points2 = base_term + (mu + cov_root @ V) * factor
     new_points = jnp.concatenate( (points0, points1, points2), axis=1 )
     new_weights = jnp.concatenate( (w0.reshape(-1,1), w1.reshape(1,-1), w2.reshape(1,-1)), axis=1 )
 
@@ -165,21 +186,21 @@ def generate_sigma_points_gaussian_GenUT( mu, cov_root, skewness, kurt, base_ter
 def sigma_point_expand(sigma_points, weights, control, dt):
    
     n, N = sigma_points.shape   
-    #TODO  
-    mu, cov = dynamics_xdot_noisy(sigma_points[:,0].reshape(-1,1), control.reshape(-1,1))
-    root_term = get_ut_cov_root_diagonal(cov) 
-    temp_points, temp_weights = generate_sigma_points_gaussian( mu, root_term, sigma_points[:,0].reshape(-1,1), dt )
-    new_points = jnp.copy( temp_points )
-    new_weights = ( jnp.copy( temp_weights ) * weights[0,0]).reshape(1,-1)
-        
-    for i in range(1,N):
+    
+    new_points = jnp.zeros((n,N*(2*n+1)))
+    new_weights = jnp.zeros((1,N*(2*n+1)))
+    
+    def body(i, inputs):
+        new_points, new_weights = inputs        
         mu, cov = dynamics_xdot_noisy(sigma_points[:,i].reshape(-1,1), control.reshape(-1,1))
         root_term = get_ut_cov_root_diagonal(cov)           
         temp_points, temp_weights = generate_sigma_points_gaussian( mu, root_term, sigma_points[:,i].reshape(-1,1), dt )
-        new_points = jnp.append(new_points, temp_points, axis=1 )
-        new_weights = jnp.append( new_weights, (temp_weights * weights[0,i]).reshape(1,-1) , axis=1 )
-
-    return new_points, new_weights
+        new_points = new_points.at[:,i*(2*n+1):(i+1)*(2*n+1)].set(temp_points)
+        new_weights = new_weights.at[0,i*(2*n+1):(i+1)*(2*n+1)].set(new_weights)        
+        return new_points, new_weights
+    
+    return lax.fori_loop(0, N, (new_points, new_weights))
+        
 
 @jit
 def sigma_point_compress( sigma_points, weights ):
