@@ -1,0 +1,3 @@
+[submodule "paper_codes/safe-control-gym"]
+	path = paper_codes/safe-control-gym
+	url = git@github.com:hardikparwana/safe-control-gym.git

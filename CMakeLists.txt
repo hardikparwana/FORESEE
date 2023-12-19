@@ -28,11 +28,11 @@ install(DIRECTORY launch configs
 # install(DIRECTORY scripts DESTINATION share/${PROJECT_NAME})
 
 
-add_executable(trajectory_node src/trajectory_node.cpp)
-ament_target_dependencies(trajectory_node rclcpp dasc_msgs)
-install( TARGETS
-    trajectory_node
-    DESTINATION lib/${PROJECT_NAME}
-)
+# add_executable(trajectory_node src/trajectory_node.cpp)
+# ament_target_dependencies(trajectory_node rclcpp dasc_msgs)
+# install( TARGETS
+#     trajectory_node
+#     DESTINATION lib/${PROJECT_NAME}
+# )
 
 ament_package()
