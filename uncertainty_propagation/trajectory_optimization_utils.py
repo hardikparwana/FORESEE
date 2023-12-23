@@ -55,22 +55,7 @@ def get_mean_cov(sigma_points, weights):
     
     # covariance
     centered_points = sigma_points - mu
-    # weighted_centered_points = centered_points * weights[0] 
-    # cov = weighted_centered_points @ centered_points.T
     cov = jnp.diag(jnp.sum(centered_points**2 * weights[0], axis=1))
-    return mu, cov
-
-def get_mean_cov_np(sigma_points, weights):
-    
-    # mean
-    weighted_points = sigma_points * weights[0]
-    mu = np.sum( weighted_points, 1 ).reshape(-1,1)
-    
-    # covariance
-    centered_points = sigma_points - mu
-    # weighted_centered_points = centered_points * weights[0] 
-    # cov = weighted_centered_points @ centered_points.T
-    cov = np.diag(np.sum(centered_points**2 * weights[0], axis=1))
     return mu, cov
 
 def get_ut_cov_root_diagonal(cov):
@@ -91,7 +76,6 @@ def get_mean_cov_skew_kurt_for_generation( sigma_points, weights ):
     mu = jnp.sum( weighted_points, 1 ).reshape(-1,1)    
     centered_points = sigma_points - mu    
     cov = jnp.diag(jnp.sum(centered_points**2 * weights[0], axis=1))
-    # return mu, cov, jnp.zeros((2,1)), jnp.zeros((2,1))
     
     skewness_temp = jnp.sum(centered_points**3 * weights[0], axis=1) #/ cov[0,0]**(3/2) # for scipy    
     skewness = skewness_temp[0] / cov[0,0]**(3/2)
@@ -103,9 +87,7 @@ def get_mean_cov_skew_kurt_for_generation( sigma_points, weights ):
     kurt = jnp.append(kurt, kurt_temp[1]/cov[1,1]**(4/2))
     kurt = jnp.append(kurt, kurt_temp[2]/cov[2,2]**(4/2))
     kurt = jnp.append(kurt, kurt_temp[3]/cov[3,3]**(4/2))
-    
-    # skewness = jnp.zeros((4,1))
-    # kurt = jnp.sqrt(3) * jnp.ones((4,1))
+
     return mu, cov, skewness.reshape(-1,1), kurt.reshape(-1,1)
 
 @jit
@@ -130,35 +112,12 @@ def generate_sigma_points_gaussian( mu, cov_root, base_term, factor ):
     new_weights = jnp.concatenate((weights0, weights1, weights2), axis=1)
     
     return new_points, new_weights    
-    
-    # new_points = jnp.zeros((n,N))
-    # new_weights = jnp.zeros((1,N))
-    # new_weights_cov = jnp.zeros((1,N))
-    
-    # new_points = new_points.at[:,0].set(dynamics_step(base_term, mu, factor))
-    # new_weights = new_weights.at[0,0].set(1.0*Lambda/(n+Lambda))
-    # new_weights_cov = new_weights_cov[0,0].set(1.0*Lambda/(n+Lambda))
-    # def body(i, inputs):
-        
-    #     new_points, new_weights, new_weights_cov = inputs
-    #     new_points = new_points.at[:,2*i-1].set(dynamics_step(base_term, (mu - jnp.sqrt(n+Lambda) * cov_root[:,i].reshape(-1,1)), factor))
-    #     new_points = new_points.at[:,2*i].set(  dynamics_step(base_term, (mu + jnp.sqrt(n+Lambda) * cov_root[:,i].reshape(-1,1)), factor))
-    #     new_weights = new_weights.at[0,2*i-1].set(1.0/(n+Lambda)/2.0)
-    #     new_weights = new_weights.at[0,2*i].set(  1.0/(n+Lambda)/2.0)
-    #     new_weights_cov = new_weights_cov[0,2*i-1].set(1.0/(n+Lambda)/2.0)
-    #     new_weights_cov = new_weights_cov[0,2*i].set(1.0/(n+Lambda)/2.0)   
-        
-    #     return new_points, new_weights, new_weights_cov
-
-    # return lax.fori_loop(0, n, body, (new_points, new_weights, new_weights_cov))
 
 @jit
 def generate_sigma_points_gaussian_GenUT( mu, cov_root, skewness, kurt, base_term, factor ):
     n = mu.shape[0]     
     N = 2*n + 1 # total points
-    # kurt = jnp.sqrt(3)
     u = 0.5 * ( - skewness + jnp.sqrt( 4 * kurt - 3 * ( skewness )**2 ) )
-    # u = jnp.sqrt(3)*jnp.ones((4,1))
     v = u + skewness
 
     w2 = (1.0 / v) / (u+v)
@@ -173,13 +132,6 @@ def generate_sigma_points_gaussian_GenUT( mu, cov_root, skewness, kurt, base_ter
     new_points = jnp.concatenate( (points0, points1, points2), axis=1 )
     new_weights = jnp.concatenate( (w0.reshape(-1,1), w1.reshape(1,-1), w2.reshape(1,-1)), axis=1 )
 
-    # new_points = dynamics_step(base_term, mu, factor)
-    # new_weights = w0.reshape(1,-1)#jnp.array([[w0]])
-    # for i in range(n):
-    #     new_points = jnp.append( new_points, dynamics_step(base_term, (mu - u[i,0]*cov_root[:,i].reshape(-1,1)), factor) , axis = 1 )
-    #     new_points = jnp.append( new_points, dynamics_step(base_term, (mu + v[i,0]*cov_root[:,i].reshape(-1,1)), factor) , axis = 1 )
-    #     new_weights = jnp.append( new_weights, jnp.array([[w1[i,0]]]), axis = 1 )
-    #     new_weights = jnp.append( new_weights, jnp.array([[w2[i,0]]]), axis = 1 )
     return new_points, new_weights
 
 @jit

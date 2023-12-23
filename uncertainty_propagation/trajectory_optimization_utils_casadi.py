@@ -10,7 +10,6 @@ def step(x,u,dt):
 
 def dynamics_step( base_term, state_dot, dt ):
     next_state = base_term + state_dot * dt
-#     print(f"next_state:{next_state}")
     return next_state
 
 # extended unicycle
@@ -168,7 +167,6 @@ def sigma_point_compress( sigma_points, weights ):
 
 def sigma_point_compress_GenUT( sigma_points, weights ):
     mu, cov, skewness, kurt = get_mean_cov_skew_kurt_for_generation( sigma_points, weights )
-    # print(f"mu:{mu}, cov:{cov}, skewness:{skewness}, kurtosis:{kurt}")
     cov_root_term = get_ut_cov_root_diagonal( cov )  
     base_term =  cd.MX.zeros(mu.shape)
     return generate_sigma_points_gaussian_GenUT( mu, cov_root_term, skewness, kurt, base_term, 1.0 )

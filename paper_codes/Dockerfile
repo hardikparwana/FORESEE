@@ -45,3 +45,7 @@ RUN python3.11 -m pip install Mosek>=10.0.18
 RUN python3.11 -m pip install termcolor>=1.1.0
 RUN python3.11 -m pip install pytest>=7.2.2
 RUN python3.11 -m pip install pre-commit>=3.3.2
+RUN python3.11 -m pip install PyQt5
+RUN python3.11 -m pip install gym>=0.21.0
+RUN apt install -y libxcb-cursor0
+RUN apt-get install -y '^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev
