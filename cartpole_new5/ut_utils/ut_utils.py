@@ -98,15 +98,15 @@ def get_next_states_with_gp( states, control_inputs, gps ):
     pred4 = gps[3](test_x)
     mu4, var4 = pred4.mean(), pred4.variance()
     
-    # pred1 = gps[0](test_x)
-    # mu1, var1 = pred1.mean(), pred1.variance()
+    pred1 = gps[0](test_x)
+    mu1, var1 = pred1.mean(), pred1.variance()
     # mu1, var1 = np.array([ states[0,:] + dt * states[1,:]  ]), np.zeros((1,9))
-    mu1, var1 = dt / 2 * states[1,:] + dt / 2 * (states[1,:]+mu2), np.zeros((1,9))
+    # mu1, var1 = dt / 2 * states[1,:] + dt / 2 * (states[1,:]+mu2), np.zeros((1,9))
     
-    # pred3 = gps[2](test_x)
-    # mu3, var3 = pred3.mean(), pred3.variance()
+    pred3 = gps[2](test_x)
+    mu3, var3 = pred3.mean(), pred3.variance()
     # mu3, var3 = np.array([ wrap_angle(states[2,:] + dt * states[3,:])  ]), np.zeros((1,9))
-    mu3, var3 = dt / 2 * states[3,:] + dt / 2 * (states[3,:]+mu4), np.zeros((1,9))
+    # mu3, var3 = dt / 2 * states[3,:] + dt / 2 * (states[3,:]+mu4), np.zeros((1,9))
     
     return states+np.concatenate((mu1.reshape(1,-1), mu2.reshape(1,-1), mu3.reshape(1,-1), mu4.reshape(1,-1)), axis=0), np.concatenate( (var1.reshape(1,-1), var2.reshape(1,-1), var3.reshape(1,-1), var4.reshape(1,-1)), axis=0 )
     
@@ -323,9 +323,9 @@ def sigma_point_compress( sigma_points, weights, weights_cov ):
 def reward_UT_Mean_Evaluator_basic(sigma_points, weights, weights_cov):
     # return np.sum(sigma_points)
     mu = 0
-    mu = mu + mc_pilco_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
+    mu = mu + compute_reward( sigma_points[:,0].reshape(-1,1)  ) *  weights[0,0]
     for i in range(1, sigma_points.shape[1]):
-        mu = mu + mc_pilco_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
+        mu = mu + compute_reward( sigma_points[:,i].reshape(-1,1)  ) *  weights[0,i]
     return mu
 reward_UT_Mean_Evaluator_basic_jit = jit(reward_UT_Mean_Evaluator_basic)
 reward_UT_Mean_Evaluator_basic_sum = lambda a,b: np.sum(reward_UT_Mean_Evaluator_basic(a,b)[0])
@@ -355,28 +355,11 @@ def mc_pilco_reward(state):
     # lengthscales = [0.1, 1.0] # theta, p
 
     target_x = 0#target_state[1]
-    target_theta = np.pi#  target_state[0]
-
-    # return ( (np.abs(theta)-target_theta) / lengthscales[0] )**2 + ( (x-target_x)/lengthscales[1] )**2
-    return (1-np.exp( -( (np.abs(theta)-target_theta) / lengthscales[0] )**2 - ( (x-target_x)/lengthscales[1] )**2 ) )
-    # return (1-np.exp( -( (np.cos(theta)-np.cos(target_theta)) / lengthscales[0] )**2 - ( (x-target_x)/lengthscales[1] )**2 ) )
-
-def mc_pilco_reward(state):
-    """ 
-    Cost function given by the combination of the saturated distance between |theta| and 'target angle', and between x and 'target position'.
-    """   
-    x = state[0,0]#states_sequence[:,:,pos_index]
-    theta = state[2,0]#states_sequence[:,:,angle_index]
-    lengthscales = [3.0, 1.0] # theta, p
-    # lengthscales = [0.1, 1.0] # theta, p
-
-    target_x = 0#target_state[1]
     target_theta = 0.0#  target_state[0]
 
     # return ( (np.abs(theta)-target_theta) / lengthscales[0] )**2 + ( (x-target_x)/lengthscales[1] )**2
     return (1-np.exp( -( (np.abs(theta)-target_theta) / lengthscales[0] )**2 - ( (x-target_x)/lengthscales[1] )**2 ) )
     # return (1-np.exp( -( (np.cos(theta)-np.cos(target_theta)) / lengthscales[0] )**2 - ( (x-target_x)/lengthscales[1] )**2 ) )
-
 
 def pilco_reward(state):
     """ 
@@ -388,7 +371,7 @@ def pilco_reward(state):
     lengthscales = [0.1, 1.0] # theta, p
 
     target_x = 0#target_state[1]
-    target_theta = np.pi#  target_state[0]
+    target_theta = 0.0#  target_state[0]
     L = 0.5
     d = target_x**2 + 2 * target_x * L * np.sin(theta) + 2 * L**2 * (1+np.cos(theta))
     return 1 - np.exp( -0.5 * ( d/0.25 )**2 )
