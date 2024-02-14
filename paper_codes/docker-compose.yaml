@@ -14,14 +14,14 @@ services:
         - ./GP-MPC:/home/GP-MPC
       environment:
         - DISPLAY=$DISPLAY
-        - NVIDIA_VISIBLE_DEVICES=all
-        - NVIDIA_DRIVER_CAPABILITIES=all
-      runtime: nvidia  # not need maybe for display atleast
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
+          #- NVIDIA_VISIBLE_DEVICES=all
+          # - NVIDIA_DRIVER_CAPABILITIES=all
+          #runtime: nvidia  # not need maybe for display atleast
+          #deploy:
+          #        resources:
+          #          reservations:
+          #            devices:
+          #              - driver: nvidia
+          #                count: 1
+          #                capabilities: [gpu]
 
