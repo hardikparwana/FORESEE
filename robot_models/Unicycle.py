@@ -141,11 +141,16 @@ class Unicycle:
             Xdot = self.f() + self.g() @ self.U 
             self.X[2,0] = wrap_angle(self.X[2,0])
             
-            if self.Xs == []:
-                self.Xs = np.copy(xold)
-                self.Us = np.copy(self.U)
-                self.Xdots = np.copy(Xdot)
-            else:            
+            try:
+                if self.Xs == []:
+                    self.Xs = np.copy(xold)
+                    self.Us = np.copy(self.U)
+                    self.Xdots = np.copy(Xdot)
+                else:            
+                    self.Xs = np.append(self.Xs,xold,axis=1)
+                    self.Us = np.append(self.Us,self.U,axis=1)
+                    self.Xdots = np.append( self.Xdots, Xdot , axis=1 )
+            except:
                 self.Xs = np.append(self.Xs,xold,axis=1)
                 self.Us = np.append(self.Us,self.U,axis=1)
                 self.Xdots = np.append( self.Xdots, Xdot , axis=1 )

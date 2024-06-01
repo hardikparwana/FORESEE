@@ -3,7 +3,6 @@ import torch
 from utils.sqrtm import sqrtm
 from robot_models.UnicycleJIT import *
 from robot_models.SingleIntegrator2D import traced_leader_predict_ideal_jit, traced_leader_predict_nominal_jit, traced_leader_predict_jit
-import pdb
 
 def get_mean_cov_JIT(sigma_points, weights):
     
@@ -199,14 +198,6 @@ def unicycle_SI2D_cbf_fov_condition_evaluator( robotJ_state, robotK_state, robot
     return A, B
 unicycle_SI2D_cbf_fov_condition_evaluator_jit = torch.jit.trace( unicycle_SI2D_cbf_fov_condition_evaluator, (torch.ones(3,1), torch.ones(2,1), torch.ones(2,1), torch.ones(3)) )
 
-def unicycle_SI2D_cbf_fov_evaluator( robotJ_state, robotK_state, robotK_state_dot, alpha_torch):
-    h1, dh1_dxj, dh1_dxk, h2, dh2_dxj, dh2_dxk, h3, dh3_dxj, dh3_dxk = unicycle_SI2D_fov_barrier_jit(robotJ_state, robotK_state)       
-
-    h = torch.cat( (h1.reshape(-1,1), h2.reshape(-1,1), h3.reshape(-1,1)), dim=0 )
-    
-    return h
-unicycle_SI2D_cbf_fov_evaluator_jit = torch.jit.trace( unicycle_SI2D_cbf_fov_evaluator, (torch.ones(3,1), torch.ones(2,1), torch.ones(2,1), torch.ones(3)) )
-
 def unicycle_SI2D_clf_condition_evaluator( robotJ_state, robotK_state, robotK_state_dot, k_torch ):
     V, dV_dxj, dV_dxk = unicycle_SI2D_lyapunov_tensor_jit( robotJ_state, robotK_state )
     
@@ -238,8 +229,8 @@ def unicycle_SI2D_UT_Mean_Evaluator(  robotJ_state, robotK_sigma_points, robotK_
     mu_B = B * robotK_weights[0,0]
     
     for i in range(1,robotK_sigma_points.shape[1]):
-        A1, B1 = unicycle_SI2D_clf_condition_evaluator( robotJ_state, robotK_sigma_points[:,i].reshape(-1,1), robotK_dot_sigma_points[:,i].reshape(-1,1), k_torch )
-        A2, B2 = unicycle_SI2D_cbf_fov_condition_evaluator( robotJ_state, robotK_sigma_points[:,i].reshape(-1,1), robotK_dot_sigma_points[:,i].reshape(-1,1), alpha_torch )   
+        A1, B1 = unicycle_SI2D_clf_condition_evaluator( robotJ_state, robotK_sigma_points[:,0].reshape(-1,1), robotK_dot_sigma_points[:,0].reshape(-1,1), k_torch )
+        A2, B2 = unicycle_SI2D_cbf_fov_condition_evaluator( robotJ_state, robotK_sigma_points[:,0].reshape(-1,1), robotK_dot_sigma_points[:,0].reshape(-1,1), alpha_torch )   
         
         B = torch.cat( (B1, B2), dim=0 )
         A = torch.cat( (A1, A2), dim=0 )
@@ -248,20 +239,6 @@ def unicycle_SI2D_UT_Mean_Evaluator(  robotJ_state, robotK_sigma_points, robotK_
         mu_B = mu_B + B * robotK_weights[0,i]
     return mu_A, mu_B
 traced_unicycle_SI2D_UT_Mean_Evaluator = torch.jit.trace(unicycle_SI2D_UT_Mean_Evaluator, (torch.ones(3,1), torch.ones(2,25), torch.ones(2,25), 1.0/25.0 * torch.ones(1,25), torch.tensor(1.0, requires_grad = True), torch.ones(3,1, requires_grad = True) ))
-
-   
-def unicycle_SI2D_UT_CBF_Mean_Cov_Evaluator(  robotJ_state, robotK_sigma_points, robotK_dot_sigma_points, robotK_weights, k_torch, alpha_torch ):
-
-    hs = unicycle_SI2D_cbf_fov_evaluator( robotJ_state, robotK_sigma_points[:,0].reshape(-1,1), robotK_dot_sigma_points[:,0].reshape(-1,1), alpha_torch )   
-        
-    for i in range(1,robotK_sigma_points.shape[1]):
-        h_temp = unicycle_SI2D_cbf_fov_evaluator( robotJ_state, robotK_sigma_points[:,0].reshape(-1,1), robotK_dot_sigma_points[:,0].reshape(-1,1), alpha_torch )   
-        hs = torch.cat( (hs, h_temp), dim=1 )
-    mu_h, cov_h = get_mean_cov_JIT( hs, robotK_weights )
-    return mu_h, cov_h
-traced_unicycle_SI2D_UT_Mean_Cov_Evaluator = torch.jit.trace(unicycle_SI2D_UT_CBF_Mean_Cov_Evaluator, (torch.zeros(3,1), torch.ones(2,25), torch.ones(2,25), 1.0/25.0 * torch.ones(1,25), torch.tensor(1.0, requires_grad = True), torch.ones(3,1, requires_grad = True) ))
-
-
 
 # @torch.jit.script
 def unicycle_reward_UT_Mean_Evaluator_basic(robotJ_state, robotK_sigma_points, robotK_weights):
