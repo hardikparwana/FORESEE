@@ -246,8 +246,8 @@ def train_policy( run, key, use_custom_gd, use_jax_scipy, use_adam, adam_start_l
 
 
 # Set up environment
-exp_name = "cartpole_new4_rl3_test2_gp24only_lr05init_mcpilco_diffrax"
-env_to_render = CustomCartPoleEnv(render_mode="rgb_array")
+exp_name = "cartpole_new5_rl3_gpall_oldreweard_lr05init_mcpilco_diffrax"
+env_to_render = CustomCartPoleEnv(render_mode="human")
 env = RecordVideo( env_to_render, video_folder="/home/dasc/hardik/FORESEE", name_prefix=exp_name )
 observation, info = env.reset(seed=42)
 
