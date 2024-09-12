@@ -7,6 +7,9 @@ import math
 #from jax import jit
 
 # plot ellipse
+home = "media/chi_square/"
+plt.rcParams.update({'font.size': 18})
+left=0.2; bottom=0.14; right=0.95; top=0.95
 
 def confidence_ellipse(mu, cov, ax, n_std=3.0, facecolor='none', **kwargs):
     """
@@ -125,16 +128,29 @@ def get_mean_cov(sigma_points, weights, weights_cov):
 # assume rows independent. therefore disginal eleemnts are 0. skewness and kurtosis only for 1-D data
 def get_mean_cov_skew_kurt_for_generation( sigma_points, weights ):
     # mean
+    # weighted_points = sigma_points * weights[0]
+    # mu = np.sum( weighted_points, 1 ).reshape(-1,1)    
+    # centered_points = sigma_points - mu    
+    # # covariance
+    # weighted_centered_points = centered_points * weights[0] 
+    # cov = weighted_centered_points @ centered_points.T    
+    # # Skewness times cov_root^-3
+    # skewness = np.sum(centered_points**3 * weights[0], axis=1) / cov[0,0]**(3/2) # for scipy    
+    # # kurtosis times cov_root^-4
+    # kurt = np.sum(centered_points**4 * weights[0], axis=1) / cov[0,0]**(4/2)  # -3 # -3 for scipy
+    # return mu, cov, skewness.reshape(-1,1), kurt.reshape(-1,1)
+
     weighted_points = sigma_points * weights[0]
     mu = np.sum( weighted_points, 1 ).reshape(-1,1)    
     centered_points = sigma_points - mu    
-    # covariance
-    weighted_centered_points = centered_points * weights[0] 
-    cov = weighted_centered_points @ centered_points.T    
-    # Skewness times cov_root^-3
-    skewness = np.sum(centered_points**3 * weights[0], axis=1) / cov[0,0]**(3/2) # for scipy    
-    # kurtosis times cov_root^-4
-    kurt = np.sum(centered_points**4 * weights[0], axis=1) / cov[0,0]**(4/2)  # -3 # -3 for scipy
+
+    cov = np.diag(np.sum(centered_points**2 * weights[0], axis=1))
+    skewness = np.sum(centered_points**3 * weights[0], axis=1) #/ cov[0,0]**(3/2) # for scipy   
+    skewness = skewness / np.diag(cov)**(3/2) 
+
+    kurt = np.sum(centered_points**4 * weights[0], axis=1)# / cov[0,0]**(4/2)  # -3 # -3 for scipy
+    kurt = kurt / np.diag(cov)**(4/2)
+    
     return mu, cov, skewness.reshape(-1,1), kurt.reshape(-1,1)
 
 # actual moments
@@ -412,7 +428,7 @@ def foresee_propagate_GenUT( sigma_points, weights, action = np.array([0]), expa
 
 # plt.show()   
 
-dt = 0.05
+dt = 0.5 #0.05
 def compare_predictions(ax, horizons = 3, num_particles = 5000, expanded_only = False):
     
     initial_state_mean = np.array([0.0,0.0]).reshape(-1,1)
@@ -487,7 +503,7 @@ def compare_predictions(ax, horizons = 3, num_particles = 5000, expanded_only = 
     # print(f" foresee cov : \n {foresee_cov}")
     # # print(f" foresee_complete cov : \n {foresee_complete_cov}")
     # print(f" pilco cov : \n {pilco_cov}")
-    
+    plt.subplots_adjust(left=left, bottom=bottom, right=right, top=top)
     return mc_mu, foresee_mu, pilco_mu, mc_cov, foresee_cov, pilco_cov, mc_time, foresee_time, foresee_genut_mu, foresee_genut_cov
 
 if 1:
@@ -495,37 +511,38 @@ if 1:
     ax1.set_xlabel("x(1)")
     ax1.set_ylabel("x(2)")
     mc_mu1, foresee_mu1, pilco_mu1, mc_cov1, foresee_cov1, pilco_cov1, time1_1, time1_2, foresee_genut_mu1, foresee_genut_cov1 = compare_predictions( ax1, horizons = 1, num_particles = 500, expanded_only = False )
-    fig1.savefig("fig1.png")
+    fig1.savefig(home+"fig1.png")
 
     fig2, ax2 = plt.subplots(1, 1)
     ax2.set_xlabel("x(1)")
     ax2.set_ylabel("x(2)")
     mc_mu2, foresee_mu2, pilco_mu2, mc_cov2, foresee_cov2, pilco_cov2, time2_1, time2_2, foresee_genut_mu2, foresee_genut_cov2 = compare_predictions( ax2, horizons = 1, num_particles = 500, expanded_only = True )
-    fig2.savefig("fig2.png")
+    fig2.savefig(home+"fig2.png")
 
     fig3, ax3 = plt.subplots(1, 1)
     ax3.set_xlabel("x(1)")
     ax3.set_ylabel("x(2)")
     mc_mu3, foresee_mu3, pilco_mu3, mc_cov3, foresee_cov3, pilco_cov3, time3_1, time3_2, foresee_genut_mu3, foresee_genut_cov3 = compare_predictions( ax3, horizons = 1, num_particles = 5000, expanded_only = False )
-    fig3.savefig("fig3.png")
+    fig3.savefig(home+"fig3.png")
 
     fig4, ax4 = plt.subplots(1, 1)
     ax4.set_xlabel("x(1)")
     ax4.set_ylabel("x(2)")
     mc_mu4, foresee_mu4, pilco_mu4, mc_cov4, foresee_cov4, pilco_cov4, time4_1, time4_2, foresee_genut_mu4, foresee_genut_cov4 = compare_predictions( ax4, horizons = 1, num_particles = 5000, expanded_only = True )
-    fig4.savefig("fig4.png")
+    fig4.savefig(home+"fig4.png")
 
     fig5, ax5 = plt.subplots(1, 1)
     ax5.set_xlabel("x(1)")
     ax5.set_ylabel("x(2)")
     mc_mu5, foresee_mu5, pilco_mu5, mc_cov5, foresee_cov5, pilco_cov5, time5_1, time5_2, foresee_genut_mu5, foresee_genut_cov5 = compare_predictions( ax5, horizons = 1, num_particles = 50000, expanded_only = False )
-    fig5.savefig("fig5.png")
+    fig5.savefig(home+"fig5.png")
 
     fig6, ax6 = plt.subplots(1, 1)
     ax6.set_xlabel("x(1)")
     ax6.set_ylabel("x(2)")
     mc_mu6, foresee_mu6, pilco_mu6, mc_cov6, foresee_cov6, pilco_cov6, time6_1, time6_2, foresee_genut_mu6, foresee_genut_cov6 = compare_predictions( ax6, horizons = 1, num_particles = 50000, expanded_only = True )
-    fig6.savefig("fig6.png")
+    fig6.savefig(home+"fig6.png")
+
 # plt.show()
 ###########################################
 if 1:
@@ -533,38 +550,38 @@ if 1:
     ax7.set_xlabel("x(1)")
     ax7.set_ylabel("x(2)")
     mc_mu7, foresee_mu7, pilco_mu7, mc_cov7, foresee_cov7, pilco_cov7, time7_1, time7_2, foresee_genut_mu7, foresee_genut_cov7 = compare_predictions( ax7, horizons = 2, num_particles = 500, expanded_only = False )
-    fig7.savefig("fig7.png")
+    fig7.savefig(home+"fig7.png")
     # plt.show()
 
     fig8, ax8 = plt.subplots(1, 1)
     ax8.set_xlabel("x(1)")
     ax8.set_ylabel("x(2)")
     mc_mu8, foresee_mu8, pilco_mu8, mc_cov8, foresee_cov8, pilco_cov8, time8_1, time8_2, foresee_genut_mu8, foresee_genut_cov8 = compare_predictions( ax8, horizons = 2, num_particles = 500, expanded_only = True )
-    fig8.savefig("fig8.png")
+    fig8.savefig(home+"fig8.png")
 
     fig9, ax9 = plt.subplots(1, 1)
     ax9.set_xlabel("x(1)")
     ax9.set_ylabel("x(2)")
     mc_mu9, foresee_mu9, pilco_mu9, mc_cov9, foresee_cov9, pilco_cov9, time9_1, time9_2, foresee_genut_mu9, foresee_genut_cov9 = compare_predictions( ax9, horizons = 2, num_particles = 5000, expanded_only = False )
-    fig9.savefig("fig9.png")
+    fig9.savefig(home+"fig9.png")
 
     fig10, ax10 = plt.subplots(1, 1)
     ax10.set_xlabel("x(1)")
     ax10.set_ylabel("x(2)")
     mc_mu10, foresee_mu10, pilco_mu10, mc_cov10, foresee_cov10, pilco_cov10, time10_1, time10_2, foresee_genut_mu10, foresee_genut_cov10 = compare_predictions( ax10, horizons = 2, num_particles = 5000, expanded_only = True )
-    fig10.savefig("fig10.png")
+    fig10.savefig(home+"fig10.png")
 
     fig11, ax11 = plt.subplots(1, 1)
     ax11.set_xlabel("x(1)")
     ax11.set_ylabel("x(2)")
     mc_mu11, foresee_mu11, pilco_mu11, mc_cov11, foresee_cov11, pilco_cov11, time11_1, time11_2, foresee_genut_mu11, foresee_genut_cov11 = compare_predictions( ax11, horizons = 2, num_particles = 50000, expanded_only = False )
-    fig11.savefig("fig11.png")
+    fig11.savefig(home+"fig11.png")
 
     fig12, ax12 = plt.subplots(1, 1)
     ax12.set_xlabel("x(1)")
     ax12.set_ylabel("x(2)")
     mc_mu12, foresee_mu12, pilco_mu12, mc_cov12, foresee_cov12, pilco_cov12, time12_1, time12_2, foresee_genut_mu12, foresee_genut_cov12 = compare_predictions( ax12, horizons = 2, num_particles = 50000, expanded_only = True )
-    fig12.savefig("fig12.png")
+    fig12.savefig(home+"fig12.png")
 
 # plt.show()
 #########################
@@ -574,37 +591,37 @@ if 1:
     ax13.set_xlabel("x(1)")
     ax13.set_ylabel("x(2)")
     mc_mu13, foresee_mu13, pilco_mu13, mc_cov13, foresee_cov13, pilco_cov13, time13_1, time13_2, foresee_genut_mu13, foresee_genut_cov13 = compare_predictions( ax13, horizons = 3, num_particles = 500, expanded_only = False )
-    fig13.savefig("fig13.png")
+    fig13.savefig(home+"fig13.png")
 
     fig23, ax23 = plt.subplots(1, 1)
     ax23.set_xlabel("x(1)")
     ax23.set_ylabel("x(2)")
     mc_mu23, foresee_mu23, pilco_mu23, mc_cov23, foresee_cov23, pilco_cov23, time23_1, time23_2, foresee_genut_mu23, foresee_genut_cov23 = compare_predictions( ax23, horizons = 3, num_particles = 500, expanded_only = True )
-    fig23.savefig("fig23.png")
+    fig23.savefig(home+"fig23.png")
 
     fig33, ax33 = plt.subplots(1, 1)
     ax33.set_xlabel("x(1)")
     ax33.set_ylabel("x(2)")
     mc_mu33, foresee_mu33, pilco_mu33, mc_cov33, foresee_cov33, pilco_cov33, time33_1, time33_2, foresee_genut_mu33, foresee_genut_cov33 = compare_predictions( ax33, horizons = 3, num_particles = 5000, expanded_only = False )
-    fig33.savefig("fig33.png")
+    fig33.savefig(home+"fig33.png")
 
     fig43, ax43 = plt.subplots(1, 1)
     ax43.set_xlabel("x(1)")
     ax43.set_ylabel("x(2)")
     mc_mu43, foresee_mu43, pilco_mu43, mc_cov43, foresee_cov43, pilco_cov43, time43_1, time43_2, foresee_genut_mu43, foresee_genut_cov43 = compare_predictions( ax43, horizons = 3, num_particles = 5000, expanded_only = True )
-    fig43.savefig("fig43.png")
+    fig43.savefig(home+"fig43.png")
 
     fig53, ax53 = plt.subplots(1, 1)
     ax53.set_xlabel("x(1)")
     ax53.set_ylabel("x(2)")
     mc_mu53, foresee_mu53, pilco_mu53, mc_cov53, foresee_cov53, pilco_cov53, time53_1, time53_2, foresee_genut_mu53, foresee_genut_cov53 = compare_predictions( ax53, horizons = 3, num_particles = 50000, expanded_only = False )
-    fig53.savefig("fig53.png")
+    fig53.savefig(home+"fig53.png")
 
     fig63, ax63 = plt.subplots(1, 1)
     ax63.set_xlabel("x(1)")
     ax63.set_ylabel("x(2)")
     mc_mu63, foresee_mu63, pilco_mu63, mc_cov63, foresee_cov63, pilco_cov63, time63_1, time63_2, foresee_genut_mu63, foresee_genut_cov63 = compare_predictions( ax63, horizons = 3, num_particles = 50000, expanded_only = True )
-    fig63.savefig("fig63.png")
+    fig63.savefig(home+"fig63.png")
 
     # plt.show()
 
@@ -616,39 +633,47 @@ if 1:
     ax14.set_xlabel("x(1)")
     ax14.set_ylabel("x(2)")
     mc_mu14, foresee_mu14, pilco_mu14, mc_cov14, foresee_cov14, pilco_cov14, time14_1, time14_2, foresee_genut_mu14, foresee_genut_cov14 = compare_predictions( ax14, horizons = 6, num_particles = 500, expanded_only = False )
-    fig14.savefig("fig14.png")
+    fig14.savefig(home+"fig14.png")
 
     fig24, ax24 = plt.subplots(1, 1)
     ax24.set_xlabel("x(1)")
     ax24.set_ylabel("x(2)")
     mc_mu24, foresee_mu24, pilco_mu24, mc_cov24, foresee_cov24, pilco_cov24, _ , _ , foresee_genut_mu24, foresee_genut_cov24 = compare_predictions( ax24, horizons = 6, num_particles = 500, expanded_only = True )
-    fig24.savefig("fig24.png")
+    fig24.savefig(home+"fig24.png")
 
     # fig34, ax34 = plt.subplots(1, 1)
     # ax34.set_xlabel("x(1)")
     # ax34.set_ylabel("x(2)")
     # mc_mu34, foresee_mu34, pilco_mu34, mc_cov34, foresee_cov34, pilco_cov34 , _ , _, foresee_genut_mu, foresee_genut_cov = compare_predictions( ax34, horizons = 10, num_particles = 5000, expanded_only = False )
-    # fig34.savefig("fig34.png")
+    # fig34.savefig(home+"fig34.png")
 
     # fig44, ax44 = plt.subplots(1, 1)
     # ax44.set_xlabel("x(1)")
     # ax44.set_ylabel("x(2)")
     # mc_mu44, foresee_mu44, pilco_mu44, mc_cov44, foresee_cov44, pilco_cov44, _ , _, foresee_genut_mu, foresee_genut_cov = compare_predictions( ax44, horizons = 10, num_particles = 5000, expanded_only = True )
-    # fig44.savefig("fig44.png")
+    # fig44.savefig(home+"fig44.png")
 
     fig54, ax54 = plt.subplots(1, 1)
     ax54.set_xlabel("x(1)")
     ax54.set_ylabel("x(2)")
     mc_mu54, foresee_mu54, pilco_mu54, mc_cov54, foresee_cov54, pilco_cov54, _ , _ , foresee_genut_mu4, foresee_genut_cov4 = compare_predictions( ax54, horizons = 6, num_particles = 50000, expanded_only = False )
-    fig54.savefig("fig54.png")
+    fig54.savefig(home+"fig54.png")
 
     # fig64, ax64 = plt.subplots(1, 1)
     # ax64.set_xlabel("x(1)")
     # ax64.set_ylabel("x(2)")
     # mc_mu64, foresee_mu64, pilco_mu64, mc_cov64, foresee_cov64, pilco_cov64, foresee_genut_mu, foresee_genut_cov = compare_predictions( ax64, horizons = 10, num_particles = 50000, expanded_only = True )
-    # fig64.savefig("fig64.png")
+    # fig64.savefig(home+"fig64.png")
 
-# plt.show()
+if 1:
+
+    fig120, ax120 = plt.subplots(1, 1)
+    ax54.set_xlabel("x(1)")
+    ax54.set_ylabel("x(2)")
+    mc_mu120, foresee_mu120, pilco_mu120, mc_cov120, foresee_cov120, pilco_cov120, _ , _ , foresee_genut_mu120, foresee_genut_cov120 = compare_predictions( ax120, horizons = 20, num_particles = 500, expanded_only = False )
+    fig120.savefig(home+"fig120.png")
+
+plt.show()
 
 # plot means:
 # horizon on x axis
@@ -680,7 +705,7 @@ new_list = range(math.floor(1), math.ceil(3)+1)
 plt.xticks(new_list)
 # ax_1.xaxis.set_major_locator(mticker.MultipleLocator(1))
 # plt.show()
-fig_1.savefig("predicted_mean_case1.png")
+fig_1.savefig(home+"predicted_mean_case1.png")
 
 fig_2, ax_2 = plt.subplots(1,1)
 
@@ -700,7 +725,7 @@ ax_2.legend()
 
 new_list = range(math.floor(1), math.ceil(3)+1)
 plt.xticks(new_list)
-fig_2.savefig("prediction_time_case1.png")
+fig_2.savefig(home+"prediction_time_case1.png")
 # ax_1.xaxis.set_major_locator(mticker.MultipleLocator(1))
 
 fig_3, ax_3 = plt.subplots(1,1)
@@ -727,7 +752,7 @@ new_list = range(math.floor(1), math.ceil(3)+1)
 plt.xticks(new_list)
 # ax_1.xaxis.set_major_locator(mticker.MultipleLocator(1))
 # plt.show()
-fig_3.savefig("predicted_cov_case1.png")
+fig_3.savefig(home+"predicted_cov_case1.png")
 
 plt.show()
 

@@ -112,13 +112,16 @@ def get_mean_cov_skew_kurt_for_generation( sigma_points, weights ):
     cov = np.diag(np.sum(centered_points**2 * weights[0], axis=1))
     # print(f"COV: {cov}")
     # Skewness times cov_root^-3
-    skewness = np.sum(centered_points**3 * weights[0], axis=1) #/ cov[0,0]**(3/2) # for scipy    
-    skewness[0] = skewness[0] / cov[0,0]**(3/2)
-    skewness[1] = skewness[1] / cov[1,1]**(3/2)
+    skewness = np.sum(centered_points**3 * weights[0], axis=1) #/ cov[0,0]**(3/2) # for scipy   
+    skewness = skewness / np.diag(cov)**(3/2) 
+    # skewness[0] = skewness[0] / cov[0,0]**(3/2)
+    # skewness[1] = skewness[1] / cov[1,1]**(3/2)
     # kurtosis times cov_root^-4
+
     kurt = np.sum(centered_points**4 * weights[0], axis=1)# / cov[0,0]**(4/2)  # -3 # -3 for scipy
-    kurt[0] = kurt[0]/cov[0,0]**(4/2)
-    kurt[1] = kurt[1]/cov[1,1]**(4/2)
+    kurt = kurt / np.diag(cov)**(4/2)
+    # kurt[0] = kurt[0]/cov[0,0]**(4/2)
+    # kurt[1] = kurt[1]/cov[1,1]**(4/2)
     return mu, cov, skewness.reshape(-1,1), kurt.reshape(-1,1)
 
 # actual moments
@@ -147,8 +150,9 @@ def get_ut_cov_root_diagonal(cov):
     return root_term
 
 def pilco_propagate(mean, cov):
-    mu, cov = dynamics_xdot_noisy(mean)
-    return dynamics_step( mean, mu, dt ), cov * dt**2
+    mu_new, cov_new = dynamics_xdot_noisy(mean)
+    # print(f"data: {mean}, {mu_new}, {cov_new}")
+    return dynamics_step( mean, mu_new, dt ), cov + cov_new * dt**2
 
 def mc_propagate(points):
     new_points = np.copy(points)

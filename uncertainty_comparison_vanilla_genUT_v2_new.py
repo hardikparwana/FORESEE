@@ -100,22 +100,35 @@ def get_mean_cov(sigma_points, weights):
 # assume rows independent. therefore disginal eleemnts are 0. skewness and kurtosis only for 1-D data
 def get_mean_cov_skew_kurt_for_generation( sigma_points, weights ):
     # mean
+#     weighted_points = sigma_points * weights[0]
+#     mu = np.sum( weighted_points, 1 ).reshape(-1,1)    
+#     centered_points = sigma_points - mu    
+#     # covariance
+# #     weighted_centered_points = centered_points * weights[0] 
+# #     cov = weighted_centered_points @ centered_points.T   
+#     cov = np.diag(np.sum(centered_points**2 * weights[0], axis=1))
+#     # print(f"COV: {cov}")
+#     # Skewness times cov_root^-3
+#     skewness = np.sum(centered_points**3 * weights[0], axis=1) #/ cov[0,0]**(3/2) # for scipy    
+#     skewness[0] = skewness[0] / max(cov[0,0],0.01)**(3/2)
+#     skewness[1] = skewness[1] / max(cov[1,1],0.01)**(3/2)
+#     # kurtosis times cov_root^-4
+#     kurt = np.sum(centered_points**4 * weights[0], axis=1)# / cov[0,0]**(4/2)  # -3 # -3 for scipy
+#     kurt[0] = kurt[0]/max(cov[0,0],0.01)**(4/2)
+#     kurt[1] = kurt[1]/max(cov[1,1],0.01)**(4/2)
+#     return mu, cov, skewness.reshape(-1,1), kurt.reshape(-1,1)
+
     weighted_points = sigma_points * weights[0]
     mu = np.sum( weighted_points, 1 ).reshape(-1,1)    
     centered_points = sigma_points - mu    
-    # covariance
-#     weighted_centered_points = centered_points * weights[0] 
-#     cov = weighted_centered_points @ centered_points.T   
+
     cov = np.diag(np.sum(centered_points**2 * weights[0], axis=1))
-    # print(f"COV: {cov}")
-    # Skewness times cov_root^-3
-    skewness = np.sum(centered_points**3 * weights[0], axis=1) #/ cov[0,0]**(3/2) # for scipy    
-    skewness[0] = skewness[0] / max(cov[0,0],0.01)**(3/2)
-    skewness[1] = skewness[1] / max(cov[1,1],0.01)**(3/2)
-    # kurtosis times cov_root^-4
+    skewness = np.sum(centered_points**3 * weights[0], axis=1) #/ cov[0,0]**(3/2) # for scipy   
+    skewness = skewness / np.diag(cov)**(3/2) 
+
     kurt = np.sum(centered_points**4 * weights[0], axis=1)# / cov[0,0]**(4/2)  # -3 # -3 for scipy
-    kurt[0] = kurt[0]/max(cov[0,0],0.01)**(4/2)
-    kurt[1] = kurt[1]/max(cov[1,1],0.01)**(4/2)
+    kurt = kurt / np.diag(cov)**(4/2)
+    
     return mu, cov, skewness.reshape(-1,1), kurt.reshape(-1,1)
 
 # actual moments
@@ -144,9 +157,8 @@ def get_ut_cov_root_diagonal(cov):
     return root_term
 
 def pilco_propagate(mean, cov):
-    mu_new, cov_new = dynamics_xdot_noisy(mean)
-    print(f"{cov}, {cov_new}")
-    return dynamics_step( mean, mu_new, dt ), cov + cov_new * dt**2
+    mu, cov = dynamics_xdot_noisy(mean)
+    return dynamics_step( mean, mu, dt ), cov * dt**2
 
 def mc_propagate(points):
     new_points = np.copy(points)
@@ -248,6 +260,26 @@ def sigma_point_expand(sigma_points, weights, control):
         mu, cov = dynamics_xdot_noisy(sigma_points[:,i].reshape(-1,1), control.reshape(-1,1))
         root_term = get_ut_cov_root_diagonal(cov)           
         temp_points, temp_weights = generate_sigma_points_gaussian( mu, root_term, sigma_points[:,i].reshape(-1,1), dt )
+        new_points = np.append(new_points, temp_points, axis=1 )
+        new_weights = np.append( new_weights, (temp_weights * weights[0,i]).reshape(1,-1) , axis=1 )
+
+    return new_points, new_weights
+
+def sigma_point_expand_GenUT(sigma_points, weights, control):
+   
+    n, N = sigma_points.shape   
+    # dt_outer = 0  
+    #TODO  
+    mu, cov = dynamics_xdot_noisy(sigma_points[:,0].reshape(-1,1), control.reshape(-1,1))
+    root_term = get_ut_cov_root_diagonal(cov) 
+    temp_points, temp_weights = generate_sigma_points_gaussian_GenUT( mu, root_term, sigma_points[:,0].reshape(-1,1), dt )
+    new_points = np.copy( temp_points )
+    new_weights = ( np.copy( temp_weights ) * weights[0,0]).reshape(1,-1)
+        
+    for i in range(1,N):
+        mu, cov = dynamics_xdot_noisy(sigma_points[:,i].reshape(-1,1), control.reshape(-1,1))
+        root_term = get_ut_cov_root_diagonal(cov)           
+        temp_points, temp_weights = generate_sigma_points_gaussian_GenUT( mu, root_term, sigma_points[:,i].reshape(-1,1), dt )
         new_points = np.append(new_points, temp_points, axis=1 )
         new_weights = np.append( new_weights, (temp_weights * weights[0,i]).reshape(1,-1) , axis=1 )
 
